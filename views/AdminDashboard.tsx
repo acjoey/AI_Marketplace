@@ -6,7 +6,7 @@ import {
   Sliders, Trash2, 
   BarChart2, DollarSign, Database, ArrowUpDown, 
   Cpu, Globe, UserCog, Edit3, X, Building2, Plus, Check, AlertTriangle, Shield, Crown, Wand2, Zap,
-  ChevronRight, ChevronDown, FolderTree
+  ChevronRight, ChevronDown, FolderTree, FileText
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -147,6 +147,7 @@ const INITIAL_DEPARTMENTS: Department[] = [
   },
   { id: 'd3', name: '市场部', memberCount: 8 },
   { id: 'd4', name: '人事部', memberCount: 5 },
+  { id: 'd5', name: 'IT部', memberCount: 3 },
 ];
 
 const INITIAL_POLICIES: Policy[] = [
@@ -186,7 +187,7 @@ const INITIAL_USERS: User[] = [
     quotas: MOCK_APPS_REF.map(a => ({ appId: a.id, appName: a.name, used: 0, limit: 'unlimited', unit: '次/月', modelId: a.modelId }))
   },
   { 
-    id: 'u1', name: '张三', email: 'zhangsan@corp.com', department: '产品部', role: 'creator', status: 'active', lastActive: '2分钟前',
+    id: 'u1', name: '张三', email: 'zhangsan@corp.com', department: '企微产品线', role: 'creator', status: 'active', lastActive: '2分钟前',
     assignedPolicyId: 'p_dev',
     quotas: [
       { appId: 'gpt', appName: 'General GPT', used: 2340, limit: 5000, unit: '次/月', modelId: 'gpt-4' },
@@ -194,7 +195,7 @@ const INITIAL_USERS: User[] = [
     ]
   },
   { 
-    id: 'u2', name: '李四', email: 'lisi@corp.com', department: '研发部', role: 'admin', status: 'active', lastActive: '10分钟前',
+    id: 'u2', name: '李四', email: 'lisi@corp.com', department: '后端组', role: 'admin', status: 'active', lastActive: '10分钟前',
     quotas: [
       { appId: 'gpt', appName: 'General GPT', used: 8900, limit: 5000, unit: '次/月', modelId: 'gpt-4' },
     ]
@@ -205,6 +206,14 @@ const INITIAL_USERS: User[] = [
       { appId: 'gpt', appName: 'General GPT', used: 545, limit: 1000, unit: '次/月', modelId: 'gpt-4' },
     ]
   },
+  {
+    id: 'u4', name: '赵六', email: 'zhaoliu@corp.com', department: '前端组', role: 'user', status: 'active', lastActive: '1天前',
+    quotas: []
+  },
+  {
+    id: 'u5', name: '孙七', email: 'sunqi@corp.com', department: 'SaaS产品线', role: 'user', status: 'active', lastActive: '3天前',
+    quotas: []
+  }
 ];
 
 const MOCK_USAGE_BY_APP = [
@@ -294,12 +303,12 @@ const RoleEditModal: React.FC<{
   );
 };
 
-// 2. Department Selector Modal (NEW)
+// 2. Department Selector Modal
 const DepartmentSelectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   departments: Department[];
-  selectedDepartments: string[]; // List of department NAMES (as per current app logic)
+  selectedDepartments: string[]; // List of department NAMES
   onConfirm: (selected: string[]) => void;
 }> = ({ isOpen, onClose, departments, selectedDepartments, onConfirm }) => {
   const [tempSelected, setTempSelected] = useState<string[]>([]);
@@ -324,9 +333,15 @@ const DepartmentSelectorModal: React.FC<{
      const hasChildren = dept.children && dept.children.length > 0;
 
      return (
-        <div className="select-none">
+        <div className="select-none relative">
+           {level > 0 && (
+              <div 
+                className="absolute border-l-2 border-slate-100 h-full"
+                style={{ left: `${(level) * 20 + 7}px`, top: 0 }} 
+              />
+           )}
            <div 
-             className={`flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group`}
+             className={`flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group relative z-10`}
              style={{ paddingLeft: `${level * 20 + 8}px` }}
              onClick={() => toggleSelection(dept.name)}
            >
@@ -393,8 +408,154 @@ const DepartmentSelectorModal: React.FC<{
   );
 };
 
+// 3. User Selector Modal (Enhanced)
+const UserSelectorModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  departments: Department[];
+  users: User[];
+  selectedUserIds: string[];
+  onConfirm: (selected: string[]) => void;
+}> = ({ isOpen, onClose, departments, users, selectedUserIds, onConfirm }) => {
+  const [tempSelected, setTempSelected] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
-// 3. Policy Edit Modal
+  useEffect(() => {
+    if (isOpen) {
+        setTempSelected(selectedUserIds);
+        setSearchQuery('');
+    }
+  }, [isOpen, selectedUserIds]);
+
+  if (!isOpen) return null;
+
+  const toggleUser = (userId: string) => {
+    setTempSelected(prev => 
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const RecursiveUserTree: React.FC<{ dept: Department; level: number }> = ({ dept, level }) => {
+     // Users in this specific department node
+     const deptUsers = users.filter(u => u.department === dept.name);
+     const filteredDeptUsers = deptUsers.filter(u => 
+        !searchQuery || u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase())
+     );
+     
+     const hasChildren = dept.children && dept.children.length > 0;
+     const [isExpanded, setIsExpanded] = useState(true);
+
+     // Visibility Check
+     if (filteredDeptUsers.length === 0 && !hasChildren && searchQuery) return null;
+
+     return (
+        <div className="select-none relative">
+            {/* Hierarchy Line */}
+            {level > 0 && (
+              <div 
+                className="absolute border-l-2 border-slate-100 h-full"
+                style={{ left: `${(level) * 20 + 7}px`, top: 0 }} 
+              />
+            )}
+
+           <div 
+             className={`flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group relative z-10`}
+             style={{ paddingLeft: `${level * 20 + 8}px` }}
+             onClick={() => setIsExpanded(!isExpanded)}
+           >
+              {(hasChildren || filteredDeptUsers.length > 0) ? (
+                 <button className="p-0.5 rounded hover:bg-slate-200 text-slate-400">
+                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                 </button>
+              ) : <div className="w-4 h-4"></div>}
+              
+              <div className="flex items-center gap-2 text-slate-600">
+                 <Building2 size={16} />
+                 <span className="text-sm font-bold">{dept.name}</span>
+                 {filteredDeptUsers.length > 0 && <span className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">{filteredDeptUsers.length}</span>}
+              </div>
+           </div>
+
+           {isExpanded && (
+              <div>
+                 {filteredDeptUsers.map(user => {
+                     const isSelected = tempSelected.includes(user.id);
+                     return (
+                         <div 
+                           key={user.id}
+                           onClick={(e) => { e.stopPropagation(); toggleUser(user.id); }}
+                           className={`flex items-center justify-between p-2 rounded-xl mb-1 cursor-pointer transition-all border relative z-10 ${isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-transparent border-transparent hover:bg-slate-50'}`}
+                           style={{ marginLeft: `${(level + 1) * 20 + 20}px`, marginRight: '8px' }}
+                         >
+                            <div className="flex items-center gap-3">
+                               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ${isSelected ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-50'}`}>
+                                  {user.name.charAt(0)}
+                               </div>
+                               <div>
+                                  <div className={`text-sm ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{user.name}</div>
+                                  <div className="text-[10px] text-slate-400 leading-none font-medium">{user.email}</div>
+                               </div>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
+                               {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                            </div>
+                         </div>
+                     );
+                 })}
+                 
+                 {dept.children?.map(child => (
+                    <RecursiveUserTree key={child.id} dept={child} level={level + 1} />
+                 ))}
+              </div>
+           )}
+        </div>
+     );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[650px] ring-1 ring-black/5">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/80 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Users size={18} className="text-indigo-600" />
+                选择特例用户
+            </h3>
+            <button onClick={onClose} className="p-1 hover:bg-slate-200/50 rounded-full text-slate-400"><X size={18} /></button>
+          </div>
+          <div className="relative">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+             <input 
+               className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-medium focus:outline-none focus:border-indigo-400 transition-all shadow-sm"
+               placeholder="搜索用户姓名或邮箱..."
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+             />
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-1">
+           {departments.map(dept => (
+              <RecursiveUserTree key={dept.id} dept={dept} level={0} />
+           ))}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button>
+            <button 
+              onClick={() => onConfirm(tempSelected)} 
+              className="px-6 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all"
+            >
+              确认选择 ({tempSelected.length})
+            </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// 4. Policy Edit Modal
 const PolicyEditModal: React.FC<{
   policy: Policy | null;
   departments: Department[];
@@ -408,10 +569,10 @@ const PolicyEditModal: React.FC<{
     id: '', name: '', description: '', modelQuotas: [], appliedDepartments: [], appliedUserIds: [], targetAll: false
   });
   const [activeTab, setActiveTab] = useState<'basics' | 'assignments'>('basics');
-  const [userSearch, setUserSearch] = useState('');
   
-  // New State for Department Selector
+  // New State for Selectors
   const [isDeptSelectorOpen, setIsDeptSelectorOpen] = useState(false);
+  const [isUserSelectorOpen, setIsUserSelectorOpen] = useState(false);
 
   useEffect(() => {
     if (policy) {
@@ -444,13 +605,11 @@ const PolicyEditModal: React.FC<{
     setFormData({ ...formData, modelQuotas: newQuotas });
   };
 
-  // Modified: Toggle removed, now just handles removing specific deps
   const removeDepartment = (deptName: string) => {
     const newDepts = formData.appliedDepartments.filter(d => d !== deptName);
     setFormData({ ...formData, appliedDepartments: newDepts });
   };
 
-  // Modified: Handle confirmation from modal
   const handleDeptConfirm = (selected: string[]) => {
       setFormData({ ...formData, appliedDepartments: selected });
       setIsDeptSelectorOpen(false);
@@ -463,12 +622,12 @@ const PolicyEditModal: React.FC<{
     setFormData({ ...formData, appliedUserIds: newUsers });
   };
 
-  const filteredUsers = users.filter(u => u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()));
+  const handleUserConfirm = (selected: string[]) => {
+      setFormData({ ...formData, appliedUserIds: selected });
+      setIsUserSelectorOpen(false);
+  };
 
-  // Get selected user objects for display
-  const selectedUserObjects = users.filter(u => formData.appliedUserIds.includes(u.id));
-
-  // Helper to render tree of SELECTED items only
+  // Helper to render tree of SELECTED departments
   const renderSelectedTree = (nodes: Department[], level = 0): React.ReactNode => {
       return nodes.map(node => {
           const isSelected = formData.appliedDepartments.includes(node.name);
@@ -514,6 +673,92 @@ const PolicyEditModal: React.FC<{
                   {node.children && (
                       <div className="pl-6 border-l border-slate-100/0 ml-2">
                           {renderSelectedTree(node.children, level + 1)}
+                      </div>
+                  )}
+              </div>
+          );
+      });
+  };
+
+  // Helper to render tree of SELECTED users (Enhanced)
+  const renderSelectedUserTree = (nodes: Department[], level = 0): React.ReactNode => {
+      return nodes.map(node => {
+          // Find users in this department that are selected
+          const deptUsers = users.filter(u => u.department === node.name && formData.appliedUserIds.includes(u.id));
+          
+          // Check if children have any selected users (to decide if we show this node)
+          const hasSelectedDescendant = (n: Department): boolean => {
+              // Does this node have selected users?
+              if (users.some(u => u.department === n.name && formData.appliedUserIds.includes(u.id))) return true;
+              // Check children
+              if (n.children) {
+                  return n.children.some(c => hasSelectedDescendant(c));
+              }
+              return false;
+          };
+          
+          const showNode = deptUsers.length > 0 || hasSelectedDescendant(node);
+
+          if (!showNode) return null;
+
+          return (
+              <div key={node.id} className="relative">
+                  {/* Vertical line connector for children */}
+                  {level > 0 && (
+                      <div className="absolute left-[-14px] top-0 bottom-0 w-px bg-slate-200"></div>
+                  )}
+                  {level > 0 && (
+                      <div className="absolute left-[-14px] top-3.5 w-3 h-px bg-slate-200"></div>
+                  )}
+
+                  {/* Department Header */}
+                  <div 
+                      className={`flex items-center gap-2 p-1 rounded-lg mb-1`}
+                      style={{ marginLeft: level > 0 ? '4px' : '0' }}
+                  >
+                      <Building2 size={14} className="text-slate-300" />
+                      <span className="text-xs font-bold text-slate-500">{node.name}</span>
+                  </div>
+
+                  {/* Users */}
+                  <div className="space-y-1 mb-1" style={{ marginLeft: level > 0 ? '4px' : '0' }}>
+                      {deptUsers.map(user => {
+                          const assignedToOtherId = user.assignedPolicyId && user.assignedPolicyId !== formData.id ? user.assignedPolicyId : null;
+                          const otherPolicyName = assignedToOtherId ? policies.find(p => p.id === assignedToOtherId)?.name : null;
+
+                          return (
+                              <div key={user.id} className="flex items-center justify-between p-2 bg-indigo-50 border border-indigo-100 rounded-lg group shadow-sm">
+                                  <div className="flex items-center gap-2">
+                                      <div className="w-6 h-6 rounded-full bg-indigo-200 flex items-center justify-center text-[10px] font-bold text-indigo-700 border-2 border-indigo-50">
+                                          {user.name.charAt(0)}
+                                      </div>
+                                      <div className="flex flex-col">
+                                          <div className="flex items-center gap-1">
+                                             <span className="text-xs font-bold text-slate-700">{user.name}</span>
+                                             {otherPolicyName && (
+                                                <div className="flex items-center text-[9px] text-amber-500 font-bold bg-amber-50 px-1 rounded border border-amber-100" title={`已绑定: ${otherPolicyName}`}>
+                                                   <AlertTriangle size={8} className="mr-0.5" /> 迁移
+                                                </div>
+                                             )}
+                                          </div>
+                                          <span className="text-[9px] text-slate-400 leading-none">{user.email}</span>
+                                      </div>
+                                  </div>
+                                  <button 
+                                      onClick={() => toggleUser(user.id)}
+                                      className="p-1.5 hover:bg-red-100 rounded text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                      <Trash2 size={14} />
+                                  </button>
+                              </div>
+                          );
+                      })}
+                  </div>
+
+                  {/* Children */}
+                  {node.children && (
+                      <div className="pl-6 border-l border-slate-100/0 ml-2">
+                          {renderSelectedUserTree(node.children, level + 1)}
                       </div>
                   )}
               </div>
@@ -648,7 +893,7 @@ const PolicyEditModal: React.FC<{
                   )}
                </div>
 
-               {/* 2. Department Selector - Modified for Tree View & Add Button */}
+               {/* 2. Department Selector */}
                <div className={`space-y-3 transition-opacity ${formData.targetAll ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                   <div className="flex justify-between items-end">
                       <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">应用部门 (部门级默认)</h4>
@@ -677,83 +922,33 @@ const PolicyEditModal: React.FC<{
 
                <div className="w-full h-px bg-slate-100"></div>
 
-               {/* 3. User Selector */}
+               {/* 3. User Selector - Updated */}
                <div className="space-y-3">
                   <div className="flex justify-between items-end">
                     <div>
                         <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">特例用户 (强制分配 - 优先级最高)</h4>
                         <p className="text-[10px] text-slate-400 mt-1">注意：选中已被其他策略绑定的用户，将自动将其迁移至此策略。</p>
                     </div>
+                    <button 
+                      onClick={() => setIsUserSelectorOpen(true)}
+                      className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"
+                    >
+                       <Plus size={14} /> 添加用户
+                    </button>
                   </div>
                   
-                  {/* Selected Users Display - NEW */}
-                  {selectedUserObjects.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                      {selectedUserObjects.map(user => (
-                        <div key={user.id} className="flex items-center gap-2 pl-1 pr-2 py-1 bg-white border border-slate-200 rounded-lg shadow-sm animate-in fade-in zoom-in duration-200">
-                           <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
-                              {user.name.charAt(0)}
-                           </div>
-                           <span className="text-xs font-bold text-slate-700">{user.name}</span>
-                           <button 
-                             onClick={(e) => { e.stopPropagation(); toggleUser(user.id); }}
-                             className="ml-1 p-0.5 rounded-md hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors"
-                           >
-                              <X size={12} />
-                           </button>
+                  {/* Tree Display of Selected Users */}
+                  <div className="min-h-[100px] p-3 border border-slate-200 rounded-xl bg-slate-50/30">
+                     {formData.appliedUserIds.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-300 py-4">
+                           <Users size={24} className="mb-2 opacity-50" />
+                           <span className="text-xs font-bold">暂无特例用户</span>
                         </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="relative">
-                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                     <input 
-                       className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium focus:outline-none focus:border-indigo-400"
-                       placeholder="搜索用户添加..."
-                       value={userSearch}
-                       onChange={(e) => setUserSearch(e.target.value)}
-                     />
-                  </div>
-
-                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                     {filteredUsers.length === 0 && <div className="text-center py-4 text-xs text-slate-400">无匹配用户</div>}
-                     {filteredUsers.map(user => {
-                       const isSelected = formData.appliedUserIds.includes(user.id);
-                       
-                       // Check if user is assigned to ANOTHER policy (Logic: User has assignedID, and it's NOT current form ID)
-                       const assignedToOtherId = user.assignedPolicyId && user.assignedPolicyId !== formData.id ? user.assignedPolicyId : null;
-                       // Look up the name from policies prop
-                       const otherPolicyName = assignedToOtherId ? policies.find(p => p.id === assignedToOtherId)?.name : null;
-
-                       return (
-                         <div 
-                           key={user.id}
-                           onClick={() => toggleUser(user.id)}
-                           className={`p-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-slate-50 border border-transparent'}`}
-                         >
-                            <div className="flex items-center gap-2">
-                               <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold flex items-center justify-center">
-                                 {user.name.charAt(0)}
-                               </div>
-                               <div className="flex flex-col">
-                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-700">{user.name}</span>
-                                    {otherPolicyName && !isSelected && (
-                                        <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 flex items-center gap-0.5" title="点击选择将强制更改其策略">
-                                            <AlertTriangle size={8} /> 已绑定: {otherPolicyName}
-                                        </span>
-                                    )}
-                                 </div>
-                                 <span className="text-[10px] text-slate-400">{user.email}</span>
-                               </div>
-                            </div>
-                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
-                               {isSelected && <Check size={10} className="text-white" />}
-                            </div>
-                         </div>
-                       )
-                     })}
+                     ) : (
+                        <div className="space-y-1">
+                           {renderSelectedUserTree(departments)}
+                        </div>
+                     )}
                   </div>
                </div>
              </div>
@@ -773,6 +968,15 @@ const PolicyEditModal: React.FC<{
         departments={departments}
         selectedDepartments={formData.appliedDepartments}
         onConfirm={handleDeptConfirm}
+    />
+    
+    <UserSelectorModal 
+        isOpen={isUserSelectorOpen}
+        onClose={() => setIsUserSelectorOpen(false)}
+        departments={departments}
+        users={users}
+        selectedUserIds={formData.appliedUserIds}
+        onConfirm={handleUserConfirm}
     />
     </>
   );
@@ -1057,6 +1261,7 @@ export const AdminDashboard: React.FC = () => {
         {/* Tab: Overview */}
         {activeTab === 'overview' && (
            <div className="flex-1 overflow-y-auto p-8">
+              {/* ... (Overview content preserved as is, only minor aesthetic tweaks implicit in CSS) ... */}
               <div className="flex justify-between items-end mb-8">
                 <div>
                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">数据概览</h2>
@@ -1185,7 +1390,7 @@ export const AdminDashboard: React.FC = () => {
            </div>
         )}
 
-        {/* Tab: User Management */}
+        {/* Tab: User Management (Preserved but could be enhanced later) */}
         {activeTab === 'users' && (
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Toolbar */}

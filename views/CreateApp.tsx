@@ -6,7 +6,7 @@ import {
   FileText, Cpu, Plug, 
   BrainCircuit, Database, Search, Code2, Sparkles, X,
   Key, Link, Settings2, Mic, Volume2, Lightbulb, Paperclip, AlertCircle, Loader2, ChevronRight, Edit3, 
-  MessageCircle, HelpCircle, Quote, ShieldCheck
+  MessageCircle, HelpCircle, Quote, ShieldCheck, PenTool, LayoutGrid
 } from 'lucide-react';
 import { AppData, WorkflowInputDef } from '../types';
 
@@ -20,6 +20,17 @@ type CreationType = 'selection' | 'external' | 'native';
 type ProviderType = 'dify' | 'n8n' | 'custom';
 type InteractionMode = 'chat' | 'workflow';
 type ConnectionStatus = 'idle' | 'testing' | 'success' | 'error';
+
+// Available Icons for Selection
+const AVAILABLE_ICONS = [
+  { id: 'gpt', icon: <MessageSquare size={20} />, label: '对话' },
+  { id: 'bot', icon: <Bot size={20} />, label: '机器人' },
+  { id: 'workflow', icon: <Workflow size={20} />, label: '工作流' },
+  { id: 'report', icon: <FileText size={20} />, label: '文档' },
+  { id: 'copy', icon: <PenTool size={20} />, label: '创作' },
+  { id: 'code', icon: <Code2 size={20} />, label: '代码' },
+  { id: 'zap', icon: <Zap size={20} />, label: '通用' },
+];
 
 export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialData }) => {
   // Determine initial creation type based on initialData
@@ -35,6 +46,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
   const [basicInfo, setBasicInfo] = useState({
     name: initialData?.name || '',
     description: initialData?.description || '',
+    icon: initialData?.icon || 'zap', // Added icon state
     iconBg: initialData?.iconBg || '#e0f2fe',
     category: '效率工具小组',
   });
@@ -79,15 +91,12 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
   const handleExternalSubmit = () => {
     setIsSubmitting(true);
     setTimeout(() => {
-      // NOTE: We no longer merge file upload capability into workflowInputs.
-      // It is stored separately in 'capabilities'.
-
       onSubmit({
         ...basicInfo,
         provider: externalConfig.provider,
         mode: externalConfig.mode,
         apiEndpoint: externalConfig.apiEndpoint,
-        icon: externalConfig.provider === 'n8n' ? 'workflow' : 'bot',
+        // icon: Use basicInfo.icon instead of hardcoding
         tag: externalConfig.mode === 'chat' ? '对话' : '自动化',
         // Preserve existing stats if editing, otherwise defaults
         usersCount: initialData?.usersCount || '0',
@@ -112,7 +121,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
         ...basicInfo,
         provider: 'native',
         mode: 'chat',
-        icon: 'gpt',
+        // icon: Use basicInfo.icon
         tag: '原生',
         // Preserve existing stats if editing
         usersCount: initialData?.usersCount || '0',
@@ -154,6 +163,24 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
               { id: 'var_n1', type: 'text', label: 'webhook_payload', required: true, placeholder: 'JSON Payload' },
               { id: 'var_n2', type: 'text', label: 'email', required: true, placeholder: 'Recipient Email' }
             ];
+
+        // Mock capabilities detection for External Providers
+        if (externalConfig.provider === 'dify') {
+            setCapabilities({
+                welcomeMessage: true,
+                fileUpload: true,
+                citations: false
+            });
+            setWelcomeMessageContent("你好！我是接入的 Dify 智能体，请问有什么可以帮你？");
+        } else {
+             // n8n or others often don't have these conversational features in the same way, defaulting to off
+            setCapabilities({
+                welcomeMessage: false,
+                fileUpload: false,
+                citations: false
+            });
+            setWelcomeMessageContent("");
+        }
         
         setExternalConfig(prev => ({
             ...prev,
@@ -287,6 +314,28 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                placeholder="给应用起个响亮的名字"
              />
           </div>
+          
+          {/* Icon Selector */}
+          <div className="col-span-2">
+             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">应用图标</label>
+             <div className="flex flex-wrap gap-3">
+               {AVAILABLE_ICONS.map(item => (
+                 <div 
+                   key={item.id}
+                   onClick={() => setBasicInfo({...basicInfo, icon: item.id})}
+                   className={`flex items-center gap-2 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
+                     basicInfo.icon === item.id 
+                       ? 'bg-slate-800 border-slate-900 text-white shadow-lg shadow-slate-200 scale-105' 
+                       : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                   }`}
+                 >
+                    {item.icon}
+                    <span className="text-sm font-bold">{item.label}</span>
+                 </div>
+               ))}
+             </div>
+          </div>
+
           <div className="col-span-2">
              <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">应用描述</label>
              <textarea 
@@ -300,43 +349,53 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
     </section>
   );
 
-  const renderCapabilitiesSection = () => (
+  const renderCapabilitiesSection = (readOnly: boolean = false) => (
     <div className="pl-11 grid grid-cols-1 gap-3">
         {capabilityDefinitions.map(cap => {
             const isEnabled = capabilities[cap.id as keyof typeof capabilities];
             return (
-                <div key={cap.id} className={`flex flex-col p-4 bg-white border rounded-xl shadow-sm transition-all ${isEnabled ? 'border-primary/30 ring-1 ring-primary/10 bg-slate-50/50' : 'border-slate-200'}`}>
+                <div key={cap.id} className={`flex flex-col p-4 bg-white border rounded-xl shadow-sm transition-all ${isEnabled ? 'border-primary/30 ring-1 ring-primary/10 bg-slate-50/50' : 'border-slate-200 opacity-60'}`}>
                     <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
-                            <div className={`p-2.5 rounded-lg flex-shrink-0 ${cap.iconBg}`}>
+                            <div className={`p-2.5 rounded-lg flex-shrink-0 ${cap.iconBg} ${!isEnabled && readOnly ? 'grayscale opacity-50' : ''}`}>
                                 {cap.icon}
                             </div>
                             <div className="pt-0.5">
-                                <h4 className="font-bold text-slate-800 text-sm mb-1">{cap.label}</h4>
+                                <h4 className={`font-bold text-sm mb-1 ${isEnabled ? 'text-slate-800' : 'text-slate-500'}`}>{cap.label}</h4>
                                 <p className="text-xs text-slate-500 leading-relaxed max-w-sm">{cap.description}</p>
                             </div>
                         </div>
                         
-                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input 
-                                type="checkbox" 
-                                className="sr-only peer"
-                                checked={isEnabled}
-                                onChange={() => toggleCapability(cap.id as keyof typeof capabilities)}
-                            />
-                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                        </label>
+                        {readOnly ? (
+                           <div className="flex flex-col items-end">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${isEnabled ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                                 {isEnabled ? '已启用' : '未启用'}
+                              </span>
+                              {isEnabled && <span className="text-[9px] text-slate-400 mt-1">源端配置</span>}
+                           </div>
+                        ) : (
+                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                <input 
+                                    type="checkbox" 
+                                    className="sr-only peer"
+                                    checked={isEnabled}
+                                    onChange={() => toggleCapability(cap.id as keyof typeof capabilities)}
+                                />
+                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                        )}
                     </div>
 
                     {/* Extended UI for Welcome Message when enabled */}
                     {cap.id === 'welcomeMessage' && isEnabled && (
                         <div className="mt-4 pt-4 border-t border-slate-200/60 pl-[52px]">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">开场白内容</label>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">开场白内容 {readOnly && "(同步自 Dify)"}</label>
                             <textarea
                                 value={welcomeMessageContent}
-                                onChange={(e) => setWelcomeMessageContent(e.target.value)}
-                                className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all resize-none h-24 placeholder:text-slate-400"
-                                placeholder="请输入 AI 的第一句问候语，例如：你好！我是您的专属助手..."
+                                onChange={(e) => !readOnly && setWelcomeMessageContent(e.target.value)}
+                                disabled={readOnly}
+                                className={`w-full p-3 rounded-xl border text-sm font-medium text-slate-700 focus:ring-4 outline-none transition-all resize-none h-24 placeholder:text-slate-400 ${readOnly ? 'bg-slate-100 border-slate-200 cursor-not-allowed' : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-primary focus:ring-primary/10'}`}
+                                placeholder="请输入 AI 的第一句问候语..."
                             />
                         </div>
                     )}
@@ -400,30 +459,49 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
           </div>
       </section>
 
-      {/* Provider Selection */}
+      {/* Provider Selection (Dropdown) */}
       <section className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 delay-100">
          <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm">2</div>
             <h3 className="text-lg font-bold text-slate-800">选择接入源</h3>
          </div>
 
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-11">
-            {['dify', 'n8n'].map(p => (
-                <div 
-                  key={p}
-                  onClick={() => {
-                     setExternalConfig(prev => ({ ...prev, provider: p as ProviderType, mode: p === 'n8n' ? 'workflow' : 'chat' }));
-                     setConnectionStatus('idle'); // Reset connection status on provider change
+         <div className="pl-11">
+             <div className="relative">
+                <Plug className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <select 
+                  value={externalConfig.provider}
+                  onChange={(e) => {
+                     const p = e.target.value as ProviderType;
+                     // Only update provider, do not force change mode
+                     setExternalConfig(prev => ({ ...prev, provider: p }));
+                     setConnectionStatus('idle'); 
                   }}
-                  className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all hover:scale-[1.02] ${externalConfig.provider === p ? 'border-indigo-500 bg-indigo-50 ring-4 ring-indigo-500/10' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 appearance-none cursor-pointer transition-all"
                 >
-                   <div className="w-10 h-10 rounded-lg bg-white border border-slate-100 flex items-center justify-center mb-3 text-slate-700">
-                      {p === 'dify' ? <Bot size={20} /> : <Workflow size={20} />}
-                   </div>
-                   <h4 className="font-bold text-slate-900 capitalize">{p}</h4>
-                   {externalConfig.provider === p && <div className="absolute top-4 right-4 text-indigo-500"><CheckCircle size={20} /></div>}
-                </div>
-            ))}
+                   <option value="dify">Dify Agent / Workflow</option>
+                   <option value="n8n">n8n Automation</option>
+                </select>
+                <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 rotate-90" size={16} />
+             </div>
+             
+             {/* Provider Description */}
+             <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-4 flex items-start gap-3">
+                 <div className="p-2 rounded-lg bg-white border border-slate-100 text-indigo-500 shadow-sm">
+                     {externalConfig.provider === 'dify' ? <Bot size={20} /> : <Workflow size={20} />}
+                 </div>
+                 <div>
+                    <h4 className="text-sm font-bold text-slate-800 mb-1">
+                      {externalConfig.provider === 'dify' ? 'Dify.AI' : 'n8n Workflow'}
+                    </h4>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                       {externalConfig.provider === 'dify' 
+                          ? 'Dify 是一个开源的 LLM 应用开发平台。接入 Dify 应用后，可直接复用其编排好的提示词、知识库和插件能力。'
+                          : 'n8n 是一个可扩展的工作流自动化工具。接入 n8n 后，可通过 Webhook 触发复杂的业务流程自动化。'
+                       }
+                    </p>
+                 </div>
+             </div>
          </div>
       </section>
 
@@ -548,10 +626,10 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                 <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 delay-200">
                     <div className="flex items-center gap-3 mb-2">
                        <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">5</div>
-                       <h3 className="text-lg font-bold text-slate-800">功能配置</h3>
+                       <h3 className="text-lg font-bold text-slate-800">功能配置 (已同步)</h3>
                     </div>
 
-                    {renderCapabilitiesSection()}
+                    {renderCapabilitiesSection(true)} 
                 </div>
             )}
          </div>
@@ -721,6 +799,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
   const previewName = basicInfo.name || '未命名应用';
   const previewDesc = basicInfo.description || '暂无描述...';
   const isNative = creationType === 'native';
+  const previewIcon = AVAILABLE_ICONS.find(i => i.id === basicInfo.icon)?.icon || <Zap size={24} />;
 
   return (
     <div className="flex h-[calc(100vh-64px)] bg-slate-50 overflow-hidden">
@@ -773,7 +852,8 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                    className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-transform"
                    style={{ backgroundColor: basicInfo.iconBg, color: '#1e293b', boxShadow: `0 8px 20px -6px ${basicInfo.iconBg}` }}
                 >
-                   {isNative ? <Cpu size={24} /> : (externalConfig.provider === 'n8n' ? <Workflow size={24} /> : <Bot size={24} />)}
+                   {/* Preview Icon from State */}
+                   {previewIcon}
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     <span className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold border uppercase tracking-wider bg-slate-50 text-slate-400 border-slate-100">
