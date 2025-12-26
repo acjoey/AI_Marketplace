@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   ArrowLeft, Play, FileText, CheckCircle, AlertCircle, 
-  Clock, Download, RefreshCw, UploadCloud, File, ShieldCheck, Zap
+  Clock, Download, RefreshCw, UploadCloud, File, ShieldCheck, Zap,
+  History, X, ChevronRight, Calendar
 } from 'lucide-react';
 import { AppData, WorkflowInputDef, WorkflowRunResult } from '../types';
 
@@ -13,8 +14,27 @@ interface WorkflowInterfaceProps {
 export const WorkflowInterface: React.FC<WorkflowInterfaceProps> = ({ app, onBack }) => {
   const [inputs, setInputs] = useState<Record<string, any>>({});
   const [isRunning, setIsRunning] = useState(false);
-  const [history, setHistory] = useState<WorkflowRunResult[]>([]);
+  
+  // Mock initial history for demonstration
+  const [history, setHistory] = useState<WorkflowRunResult[]>([
+    {
+      id: 'mock-1',
+      status: 'completed',
+      timestamp: Date.now() - 1000 * 60 * 60 * 2, // 2 hours ago
+      inputs: { 'w1': '2023 W41', 'w2': 'Project Alpha launch successful.' },
+      outputText: "### 自动化生成的报告\n\n**本周重点：**\nProject Alpha 顺利发布，各项指标符合预期。\n\n**风险提示：**\n供应链延迟风险略有上升。",
+      outputFiles: [{ name: 'Weekly_Report_W41.pdf', url: '#', size: '450 KB' }]
+    },
+    {
+      id: 'mock-2',
+      status: 'failed',
+      timestamp: Date.now() - 1000 * 60 * 60 * 24, // 1 day ago
+      inputs: { 'w1': '2023 W40' },
+      outputText: "Error: Data source connection timeout. Please check your network settings.",
+    }
+  ]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Use defined inputs or default fallback
   const workflowInputs = app.workflowInputs || [
@@ -61,11 +81,18 @@ export const WorkflowInterface: React.FC<WorkflowInterfaceProps> = ({ app, onBac
 
   const activeResult = history.find(h => h.id === activeRunId);
 
+  // Helper to get input summary for list
+  const getInputSummary = (inputs: Record<string, any>) => {
+     const values = Object.values(inputs);
+     if (values.length === 0) return 'No inputs';
+     return values[0];
+  };
+
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-slate-50 p-6 gap-6 overflow-hidden">
+    <div className="flex h-[calc(100vh-64px)] bg-slate-50 p-6 gap-6 overflow-hidden relative">
       
       {/* Sidebar: Form Input */}
-      <aside className="w-1/3 min-w-[400px] bg-white/80 backdrop-blur-xl border border-white/60 rounded-3xl shadow-float flex flex-col ring-1 ring-slate-900/5 relative overflow-hidden">
+      <aside className="w-1/3 min-w-[400px] bg-white/80 backdrop-blur-xl border border-white/60 rounded-3xl shadow-float flex flex-col ring-1 ring-slate-900/5 relative overflow-hidden z-10">
          {/* Header */}
          <div className="p-6 border-b border-slate-100 bg-white/50 backdrop-blur-sm z-10">
             <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-slate-800 transition-colors text-xs font-bold mb-4">
@@ -118,6 +145,22 @@ export const WorkflowInterface: React.FC<WorkflowInterfaceProps> = ({ app, onBac
                        />
                     )}
 
+                    {input.type === 'select' && (
+                       <div className="relative">
+                           <select
+                               className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-sm font-medium appearance-none"
+                               value={inputs[input.id] || ''}
+                               onChange={(e) => handleInputChange(input.id, e.target.value)}
+                           >
+                               <option value="" disabled>请选择</option>
+                               {input.options?.map(opt => (
+                                   <option key={opt} value={opt}>{opt}</option>
+                               ))}
+                           </select>
+                           <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" size={16} />
+                       </div>
+                    )}
+
                     {input.type === 'file' && (
                        <div className="relative group">
                           <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center transition-all group-hover:border-primary/50 group-hover:bg-primary-soft/30 bg-slate-50/50">
@@ -164,10 +207,10 @@ export const WorkflowInterface: React.FC<WorkflowInterfaceProps> = ({ app, onBac
       </aside>
 
       {/* Main Content: Results & History */}
-      <main className="flex-1 flex flex-col gap-6 overflow-hidden">
+      <main className="flex-1 flex flex-col gap-6 overflow-hidden relative">
          
          {/* Active Result View */}
-         <div className="flex-1 bg-white/80 backdrop-blur-xl border border-white/60 rounded-3xl shadow-float flex flex-col overflow-hidden relative ring-1 ring-slate-900/5">
+         <div className="flex-1 bg-white/80 backdrop-blur-xl border border-white/60 rounded-3xl shadow-float flex flex-col overflow-hidden relative ring-1 ring-slate-900/5 z-0">
             <div className="absolute inset-0 bg-mesh opacity-30 pointer-events-none -z-10" />
             
             {/* Toolbar */}
@@ -175,13 +218,27 @@ export const WorkflowInterface: React.FC<WorkflowInterfaceProps> = ({ app, onBac
                <span className="font-extrabold text-slate-700 text-sm uppercase tracking-wider flex items-center gap-2">
                  <FileText size={16} className="text-primary" /> 执行结果
                </span>
-               {activeResult && (
-                  <div className="flex items-center gap-2">
-                     <span className="text-xs text-slate-400 font-mono">{activeResult.id}</span>
-                     {activeResult.status === 'completed' && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 text-[10px] font-bold border border-emerald-200">SUCCESS</span>}
-                     {activeResult.status === 'running' && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold border border-blue-200 animate-pulse">RUNNING</span>}
-                  </div>
-               )}
+               
+               <div className="flex items-center gap-3">
+                  {activeResult && (
+                     <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400 font-mono hidden sm:inline-block">{activeResult.id}</span>
+                        {activeResult.status === 'completed' && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 text-[10px] font-bold border border-emerald-200">SUCCESS</span>}
+                        {activeResult.status === 'running' && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold border border-blue-200 animate-pulse">RUNNING</span>}
+                        {activeResult.status === 'failed' && <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold border border-red-200">FAILED</span>}
+                     </div>
+                  )}
+
+                  <div className="h-4 w-px bg-slate-200 mx-1"></div>
+
+                  <button 
+                     onClick={() => setIsHistoryOpen(true)}
+                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-xs font-bold hover:border-primary hover:text-primary transition-all shadow-sm group"
+                  >
+                     <History size={14} className="group-hover:text-primary transition-colors" />
+                     历史记录
+                  </button>
+               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-8">
@@ -208,6 +265,13 @@ export const WorkflowInterface: React.FC<WorkflowInterfaceProps> = ({ app, onBac
                         </div>
                      ) : (
                         <div className="space-y-8">
+                           {/* Meta Info */}
+                           <div className="flex items-center gap-4 text-xs text-slate-400 pb-4 border-b border-slate-100">
+                              <div className="flex items-center gap-1.5"><Calendar size={14} /> {new Date(activeResult.timestamp).toLocaleString()}</div>
+                              <div className="w-px h-3 bg-slate-200"></div>
+                              <div>ID: {activeResult.id}</div>
+                           </div>
+
                            {/* Text Output */}
                            {activeResult.outputText && (
                               <div className="prose prose-slate prose-sm max-w-none bg-white p-8 rounded-2xl border border-slate-100 shadow-sm">
@@ -246,29 +310,71 @@ export const WorkflowInterface: React.FC<WorkflowInterfaceProps> = ({ app, onBac
             </div>
          </div>
 
-         {/* History / Recent Runs */}
-         {history.length > 0 && (
-            <div className="h-48 bg-white/60 backdrop-blur-md border border-white/60 rounded-3xl p-4 flex flex-col">
-               <div className="px-2 mb-2 text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                  <Clock size={12} /> 最近运行记录
-               </div>
-               <div className="flex-1 overflow-x-auto flex items-center gap-3 pb-2">
-                  {history.map(run => (
-                     <div 
-                        key={run.id} 
-                        onClick={() => setActiveRunId(run.id)}
-                        className={`min-w-[200px] p-3 rounded-xl border cursor-pointer transition-all flex flex-col gap-2 ${activeRunId === run.id ? 'bg-white border-primary shadow-md ring-1 ring-primary/10' : 'bg-white/50 border-slate-100 hover:border-slate-300'}`}
-                     >
-                        <div className="flex justify-between items-center">
-                           <span className="text-[10px] font-mono text-slate-400">#{run.id.slice(-4)}</span>
-                           {run.status === 'completed' && <CheckCircle size={12} className="text-emerald-500" />}
-                           {run.status === 'running' && <RefreshCw size={12} className="text-blue-500 animate-spin" />}
-                        </div>
-                        <div className="text-xs font-bold text-slate-700 truncate">
-                           {Object.values(run.inputs)[0] || 'Task'}
-                        </div>
-                     </div>
-                  ))}
+         {/* History Drawer */}
+         {isHistoryOpen && (
+            <div className="absolute inset-0 z-50 flex justify-end bg-slate-900/10 backdrop-blur-sm animate-in fade-in duration-200 rounded-3xl overflow-hidden">
+               <div className="flex-1" onClick={() => setIsHistoryOpen(false)} />
+               <div className="w-96 bg-white h-full shadow-2xl border-l border-white/50 flex flex-col animate-in slide-in-from-right duration-300">
+                  <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 backdrop-blur-md">
+                     <h3 className="font-extrabold text-slate-800 flex items-center gap-2">
+                        <History size={18} className="text-primary" /> 运行历史
+                     </h3>
+                     <button onClick={() => setIsHistoryOpen(false)} className="p-2 hover:bg-slate-200/50 rounded-full text-slate-400 transition-colors">
+                        <X size={18} />
+                     </button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/30">
+                     {history.length === 0 ? (
+                        <div className="text-center py-10 text-slate-400 text-xs font-bold">暂无运行记录</div>
+                     ) : (
+                        history.map(run => (
+                           <div 
+                              key={run.id} 
+                              onClick={() => { setActiveRunId(run.id); setIsHistoryOpen(false); }}
+                              className={`p-4 rounded-2xl border cursor-pointer transition-all group relative overflow-hidden ${
+                                 activeRunId === run.id 
+                                    ? 'bg-white border-primary shadow-md ring-1 ring-primary/10' 
+                                    : 'bg-white border-slate-200 hover:border-primary/50 hover:shadow-sm'
+                              }`}
+                           >
+                              <div className="flex justify-between items-start mb-2">
+                                 <div className="flex items-center gap-2">
+                                    {run.status === 'completed' && <CheckCircle size={14} className="text-emerald-500" />}
+                                    {run.status === 'running' && <RefreshCw size={14} className="text-blue-500 animate-spin" />}
+                                    {run.status === 'failed' && <AlertCircle size={14} className="text-red-500" />}
+                                    <span className={`text-xs font-bold uppercase tracking-wider ${
+                                       run.status === 'completed' ? 'text-emerald-600' : 
+                                       run.status === 'failed' ? 'text-red-600' : 'text-blue-600'
+                                    }`}>
+                                       {run.status}
+                                    </span>
+                                 </div>
+                                 <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
+                                    {new Date(run.timestamp).toLocaleDateString()}
+                                 </span>
+                              </div>
+                              
+                              <div className="text-[10px] text-slate-400 mb-2 flex items-center gap-1">
+                                <Clock size={10} /> {new Date(run.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </div>
+                              
+                              <div className="space-y-1 pt-2 border-t border-slate-100">
+                                 {Object.entries(run.inputs).slice(0, 3).map(([key, val]) => (
+                                    <div key={key} className="text-xs text-slate-500 truncate flex items-center gap-1">
+                                       <span className="font-bold text-slate-700 max-w-[80px] truncate">{key}:</span> 
+                                       <span className="truncate">{String(val)}</span>
+                                    </div>
+                                 ))}
+                              </div>
+
+                              <div className="absolute right-3 bottom-3 opacity-0 group-hover:opacity-100 transition-opacity text-primary">
+                                 <ArrowLeft size={16} className="rotate-180" />
+                              </div>
+                           </div>
+                        ))
+                     )}
+                  </div>
                </div>
             </div>
          )}

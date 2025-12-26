@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, Download, CheckCircle,
@@ -6,7 +7,7 @@ import {
   Sliders, Trash2, 
   BarChart2, DollarSign, Database, ArrowUpDown, 
   Cpu, Globe, UserCog, Edit3, X, Building2, Plus, Check, AlertTriangle, Shield, Crown, Wand2, Zap,
-  ChevronRight, ChevronDown, FolderTree, FileText
+  ChevronRight, ChevronDown, FolderTree, FileText, Calculator
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -19,7 +20,7 @@ interface AppQuotaUsage {
   appId: string;
   appName: string;
   used: number;
-  limit: number | 'unlimited'; 
+  limit?: number | 'unlimited'; // Logic change: Limit is calculated dynamically now
   unit: string; 
   modelId: string; 
 }
@@ -34,7 +35,7 @@ interface User {
   role: UserRole; 
   status: 'active' | 'disabled';
   lastActive: string;
-  assignedPolicyId?: string; 
+  assignedPolicyIds?: string[]; // CHANGED: Support multiple policies
   quotas: AppQuotaUsage[]; 
 }
 
@@ -153,7 +154,7 @@ const INITIAL_DEPARTMENTS: Department[] = [
 const INITIAL_POLICIES: Policy[] = [
   {
     id: 'p_std',
-    name: '全员基础策略 (Standard)',
+    name: '全员基础策略',
     description: '适用于大多数行政和职能部门。',
     modelQuotas: [
       { modelId: 'gpt-4', limit: 50 }, 
@@ -167,7 +168,7 @@ const INITIAL_POLICIES: Policy[] = [
   },
   {
     id: 'p_dev',
-    name: '研发高频策略 (Dev High)',
+    name: '研发高频策略',
     description: '针对研发部门优化。',
     modelQuotas: [
       { modelId: 'gpt-4', limit: 500 }, 
@@ -178,32 +179,45 @@ const INITIAL_POLICIES: Policy[] = [
     targetAll: false,
     appliedDepartments: ['研发部'],
     appliedUserIds: ['u1'] 
+  },
+  {
+    id: 'p_vip',
+    name: 'VIP 通道',
+    description: '特定项目所需的额外配额叠加。',
+    modelQuotas: [
+      { modelId: 'gpt-4', limit: 2000 }, 
+      { modelId: 'gpt-3.5', limit: 'unlimited' }
+    ],
+    targetAll: false,
+    appliedDepartments: [],
+    appliedUserIds: ['u1', 'u3'] // u1 now has both p_dev AND p_vip
   }
 ];
 
 const INITIAL_USERS: User[] = [
   { 
     id: 'u0', name: 'Admin Root', email: 'root@corp.com', department: 'IT部', role: 'super_admin', status: 'active', lastActive: '刚刚',
-    quotas: MOCK_APPS_REF.map(a => ({ appId: a.id, appName: a.name, used: 0, limit: 'unlimited', unit: '次/月', modelId: a.modelId }))
+    quotas: MOCK_APPS_REF.map(a => ({ appId: a.id, appName: a.name, used: 0, unit: '次/月', modelId: a.modelId }))
   },
   { 
     id: 'u1', name: '张三', email: 'zhangsan@corp.com', department: '企微产品线', role: 'creator', status: 'active', lastActive: '2分钟前',
-    assignedPolicyId: 'p_dev',
+    assignedPolicyIds: ['p_dev', 'p_vip'], // Changed to array
     quotas: [
-      { appId: 'gpt', appName: 'General GPT', used: 2340, limit: 5000, unit: '次/月', modelId: 'gpt-4' },
-      { appId: 'weekly', appName: '周报助手', used: 4, limit: 100, unit: '次/月', modelId: 'gpt-3.5' },
+      { appId: 'gpt', appName: 'General GPT', used: 2340, unit: '次/月', modelId: 'gpt-4' },
+      { appId: 'weekly', appName: '周报助手', used: 4, unit: '次/月', modelId: 'gpt-3.5' },
     ]
   },
   { 
     id: 'u2', name: '李四', email: 'lisi@corp.com', department: '后端组', role: 'admin', status: 'active', lastActive: '10分钟前',
     quotas: [
-      { appId: 'gpt', appName: 'General GPT', used: 8900, limit: 5000, unit: '次/月', modelId: 'gpt-4' },
+      { appId: 'gpt', appName: 'General GPT', used: 8900, unit: '次/月', modelId: 'gpt-4' },
     ]
   },
   { 
     id: 'u3', name: '王五', email: 'wangwu@corp.com', department: '市场部', role: 'user', status: 'active', lastActive: '2小时前',
+    assignedPolicyIds: ['p_vip'],
     quotas: [
-      { appId: 'gpt', appName: 'General GPT', used: 545, limit: 1000, unit: '次/月', modelId: 'gpt-4' },
+      { appId: 'gpt', appName: 'General GPT', used: 545, unit: '次/月', modelId: 'gpt-4' },
     ]
   },
   {
@@ -230,12 +244,39 @@ const MOCK_USAGE_BY_DEPT = [
   { name: '人事部', calls: 1200, tokens: 400, cost: 120 },
 ];
 
-const applyPolicyToQuotas = (quotas: AppQuotaUsage[], policy?: Policy): AppQuotaUsage[] => {
-  if (!policy) return quotas;
-  return quotas.map(quota => {
-    const limitConfig = policy.modelQuotas.find(mq => mq.modelId === quota.modelId);
-    return limitConfig ? { ...quota, limit: limitConfig.limit } : quota;
+// Helper: Get all policies applicable to a user
+const getApplicablePoliciesForUser = (user: User, allPolicies: Policy[]): Policy[] => {
+  return allPolicies.filter(p => {
+    // 1. Direct Assignment (High Priority conceptually, but limits are merged via MAX)
+    if (p.appliedUserIds.includes(user.id)) return true;
+    
+    // 2. Department Assignment
+    if (p.appliedDepartments.includes(user.department)) return true;
+    
+    // 3. Global Target
+    if (p.targetAll) return true;
+    
+    return false;
   });
+};
+
+// Helper: Calculate effective limit for a model based on multiple policies (MAX logic)
+const getEffectiveModelLimit = (modelId: string, policies: Policy[]): number | 'unlimited' => {
+  let maxLimit: number = 0;
+  let hasUnlimited = false;
+
+  policies.forEach(p => {
+    const quota = p.modelQuotas.find(mq => mq.modelId === modelId);
+    if (quota) {
+      if (quota.limit === 'unlimited') {
+        hasUnlimited = true;
+      } else {
+        if (quota.limit > maxLimit) maxLimit = quota.limit;
+      }
+    }
+  });
+
+  return hasUnlimited ? 'unlimited' : maxLimit;
 };
 
 // --- Sub-Components ---
@@ -723,8 +764,8 @@ const PolicyEditModal: React.FC<{
                   {/* Users */}
                   <div className="space-y-1 mb-1" style={{ marginLeft: level > 0 ? '4px' : '0' }}>
                       {deptUsers.map(user => {
-                          const assignedToOtherId = user.assignedPolicyId && user.assignedPolicyId !== formData.id ? user.assignedPolicyId : null;
-                          const otherPolicyName = assignedToOtherId ? policies.find(p => p.id === assignedToOtherId)?.name : null;
+                          const userOtherPolicyIds = user.assignedPolicyIds?.filter(pid => pid !== formData.id) || [];
+                          const hasOtherPolicies = userOtherPolicyIds.length > 0;
 
                           return (
                               <div key={user.id} className="flex items-center justify-between p-2 bg-indigo-50 border border-indigo-100 rounded-lg group shadow-sm">
@@ -735,9 +776,9 @@ const PolicyEditModal: React.FC<{
                                       <div className="flex flex-col">
                                           <div className="flex items-center gap-1">
                                              <span className="text-xs font-bold text-slate-700">{user.name}</span>
-                                             {otherPolicyName && (
-                                                <div className="flex items-center text-[9px] text-amber-500 font-bold bg-amber-50 px-1 rounded border border-amber-100" title={`已绑定: ${otherPolicyName}`}>
-                                                   <AlertTriangle size={8} className="mr-0.5" /> 迁移
+                                             {hasOtherPolicies && (
+                                                <div className="flex items-center text-[9px] text-blue-500 font-bold bg-blue-50 px-1 rounded border border-blue-100" title={`其他关联: ${userOtherPolicyIds.length} 个策略`}>
+                                                   <Layers size={8} className="mr-0.5" /> 叠加
                                                 </div>
                                              )}
                                           </div>
@@ -926,8 +967,8 @@ const PolicyEditModal: React.FC<{
                <div className="space-y-3">
                   <div className="flex justify-between items-end">
                     <div>
-                        <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">特例用户 (强制分配 - 优先级最高)</h4>
-                        <p className="text-[10px] text-slate-400 mt-1">注意：选中已被其他策略绑定的用户，将自动将其迁移至此策略。</p>
+                        <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">特例用户 (叠加策略)</h4>
+                        <p className="text-[10px] text-slate-400 mt-1">注意：选中用户将叠加此策略的配额（取最大值），支持一人多策略。</p>
                     </div>
                     <button 
                       onClick={() => setIsUserSelectorOpen(true)}
@@ -1007,23 +1048,9 @@ export const AdminDashboard: React.FC = () => {
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleDefinition | null>(null);
 
-  // Helper
-  const getPolicyByDept = (deptName: string) => {
-    // Priority 2: Department Assignment
-    const deptPolicy = policies.find(p => p.appliedDepartments.includes(deptName));
-    if (deptPolicy) return deptPolicy;
-
-    // Priority 3: Global Assignment (targetAll)
-    const globalPolicy = policies.find(p => p.targetAll);
-    return globalPolicy || null;
-  };
-
-  const getActivePolicyForUser = (user: User) => {
-     // Priority 1: Direct Assignment (Stored in User ID Check inside Policy or assignedPolicyId override)
-     if (user.assignedPolicyId) {
-       return policies.find(p => p.id === user.assignedPolicyId) || null;
-     }
-     return getPolicyByDept(user.department);
+  // Helper: Get active policies for display/filtering logic
+  const getUserActivePolicies = (user: User) => {
+    return getApplicablePoliciesForUser(user, policies);
   };
 
   const getRoleConfig = (roleKey: UserRole) => {
@@ -1037,93 +1064,35 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleSavePolicy = (newPolicy: Policy) => {
-    // 1. Update Policies List (Enforce Mutually Exclusive User Assignments)
+    // 1. Update Policies List
+    // Note: We REMOVED the logic that strips users from other policies. Multi-policy is now allowed.
     setPolicies(prev => {
-      // Determine if the policy already exists
       const exists = prev.find(p => p.id === newPolicy.id);
-      
-      let updatedPolicies = prev;
-      
       if (exists) {
-        // Update existing
-        updatedPolicies = prev.map(p => {
-           if (p.id === newPolicy.id) return newPolicy;
-           
-           // CRITICAL LOGIC: If 'newPolicy' claims users, remove them from 'p'
-           const conflictUsers = p.appliedUserIds.filter(uid => newPolicy.appliedUserIds.includes(uid));
-           if (conflictUsers.length > 0) {
-               return {
-                   ...p,
-                   appliedUserIds: p.appliedUserIds.filter(uid => !newPolicy.appliedUserIds.includes(uid))
-               };
-           }
-           return p;
-        });
+        return prev.map(p => p.id === newPolicy.id ? newPolicy : p);
       } else {
-        // Add new policy
-        // Also need to clean other policies if the new policy claims existing users
-        const othersCleaned = prev.map(p => {
-            const conflictUsers = p.appliedUserIds.filter(uid => newPolicy.appliedUserIds.includes(uid));
-            if (conflictUsers.length > 0) {
-                return {
-                    ...p,
-                    appliedUserIds: p.appliedUserIds.filter(uid => !newPolicy.appliedUserIds.includes(uid))
-                };
-            }
-            return p;
-        });
-        updatedPolicies = [...othersCleaned, newPolicy];
+        return [...prev, newPolicy];
       }
-      return updatedPolicies;
     });
 
-    // 2. Cascade Update Users based on Assignments
-    // We do this based on the *newPolicy* data primarily, but we also rely on the *updated policies* list logic conceptually.
-    // However, since we update state asynchronously, we calculate the logic here.
-    
+    // 2. Sync User State 'assignedPolicyIds' for easier lookup (optional but good for consistency)
     setUsers(prev => prev.map(u => {
-      let assignedPolicyId = u.assignedPolicyId;
+      // Logic: Update the specific policy ID in the user's list
+      // Check if user is in the new policy's applied list
+      const inNewPolicy = newPolicy.appliedUserIds.includes(u.id);
+      let newAssignedIds = u.assignedPolicyIds || [];
 
-      // Logic A: If user is in the NEW policy's explicit list -> Force assign to new policy
-      if (newPolicy.appliedUserIds.includes(u.id)) {
-         assignedPolicyId = newPolicy.id;
-      } 
-      // Logic B: If user WAS assigned to this policy ID, but is NO LONGER in the list -> Remove assignment
-      else if (u.assignedPolicyId === newPolicy.id && !newPolicy.appliedUserIds.includes(u.id)) {
-         assignedPolicyId = undefined; 
-      }
-      // Logic C: User was assigned to ANOTHER policy, but that policy just lost the user in step 1?
-      // Actually, since we update `assignedPolicyId` based on `newPolicy.appliedUserIds.includes(u.id)`,
-      // if they are moved, Logic A handles it.
-      
-      // Re-evaluate effective quota (Visual refresh)
-      let effectivePolicy = null;
-      if (assignedPolicyId) {
-         effectivePolicy = (assignedPolicyId === newPolicy.id) ? newPolicy : policies.find(p => p.id === assignedPolicyId);
-         // Note: `policies` here is stale (previous state), but for IDs other than newPolicy, config hasn't changed aside from appliedUserIds list.
-         // Since we trust assignedPolicyId ID, it's fine.
+      if (inNewPolicy) {
+         if (!newAssignedIds.includes(newPolicy.id)) {
+            newAssignedIds = [...newAssignedIds, newPolicy.id];
+         }
+      } else {
+         newAssignedIds = newAssignedIds.filter(id => id !== newPolicy.id);
       }
       
-      if (!effectivePolicy) {
-         if (newPolicy.appliedDepartments.includes(u.department)) {
-            effectivePolicy = newPolicy;
-         } else {
-            effectivePolicy = policies.find(p => p.id !== newPolicy.id && p.appliedDepartments.includes(u.department));
-         }
-      }
-
-      if (!effectivePolicy) {
-         if (newPolicy.targetAll) {
-            effectivePolicy = newPolicy;
-         } else {
-            effectivePolicy = policies.find(p => p.id !== newPolicy.id && p.targetAll);
-         }
-      }
-
       return { 
         ...u, 
-        assignedPolicyId,
-        quotas: applyPolicyToQuotas(u.quotas, effectivePolicy || undefined)
+        assignedPolicyIds: newAssignedIds
       };
     }));
 
@@ -1132,13 +1101,22 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleDeletePolicy = (id: string) => {
-    const isUsed = users.some(u => u.assignedPolicyId === id) || policies.find(p => p.id === id)?.appliedDepartments.length! > 0 || policies.find(p => p.id === id)?.targetAll;
+    const isUsed = policies.find(p => p.id === id)?.appliedDepartments.length! > 0 || policies.find(p => p.id === id)?.targetAll;
     
+    // Warn if department or global usage, but for users we just remove the assignment
     if (isUsed) {
-      alert("策略正在被使用（部门默认、特例用户或作为全局策略），请先移除相关关联。");
+      alert("策略正在作为部门默认或全局策略使用，请先移除相关关联。");
       return;
     }
+    
+    // Remove from policies
     setPolicies(prev => prev.filter(p => p.id !== id));
+    
+    // Clean up users
+    setUsers(prev => prev.map(u => ({
+        ...u,
+        assignedPolicyIds: u.assignedPolicyIds?.filter(pid => pid !== id)
+    })));
   };
 
   const handleOpenRoleEdit = (role: RoleDefinition) => {
@@ -1187,10 +1165,10 @@ export const AdminDashboard: React.FC = () => {
       // Policy Filter
       let matchesPolicy = true;
       if (filterPolicy === 'special') {
-          matchesPolicy = !!user.assignedPolicyId;
+          matchesPolicy = (user.assignedPolicyIds?.length || 0) > 0;
       } else if (filterPolicy !== 'all') {
-         const activePolicy = getActivePolicyForUser(user);
-         matchesPolicy = activePolicy?.id === filterPolicy;
+         const activePolicies = getApplicablePoliciesForUser(user, policies);
+         matchesPolicy = activePolicies.some(p => p.id === filterPolicy);
       }
 
       // Role Filter
@@ -1390,7 +1368,7 @@ export const AdminDashboard: React.FC = () => {
            </div>
         )}
 
-        {/* Tab: User Management (Preserved but could be enhanced later) */}
+        {/* Tab: User Management */}
         {activeTab === 'users' && (
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Toolbar */}
@@ -1439,32 +1417,63 @@ export const AdminDashboard: React.FC = () => {
                      <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-400">
                        <th className="p-5 pl-8 text-xs font-extrabold uppercase tracking-wider">用户</th>
                        <th className="p-5 text-xs font-extrabold uppercase tracking-wider">角色 & 状态</th>
-                       <th className="p-5 text-xs font-extrabold uppercase tracking-wider">部门 & 策略</th>
-                       <th className="p-5 text-xs font-extrabold uppercase tracking-wider">当前配额健康度 (按模型)</th>
+                       <th className="p-5 text-xs font-extrabold uppercase tracking-wider">部门 & 策略组合</th>
+                       <th className="p-5 text-xs font-extrabold uppercase tracking-wider">当前生效配额 (取策略最大值)</th>
                      </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-50">
                      {filteredUsers.map((user) => {
-                       const activePolicy = getActivePolicyForUser(user);
-                       const isOverride = !!user.assignedPolicyId;
+                       const activePolicies = getApplicablePoliciesForUser(user, policies);
                        const roleInfo = getRoleConfig(user.role);
                        
-                       // Calculation Logic for Quota Health
+                       // Calculation Logic for Quota Health based on Effective Limits
                        let totalUsed = 0;
                        let totalLimit = 0;
                        let hasUnlimited = false;
-                       const atLimitApps = user.quotas.filter(q => q.limit !== 'unlimited' && q.used >= q.limit).length;
+                       let atLimitApps = 0;
 
                        user.quotas.forEach(q => {
+                         const effectiveLimit = getEffectiveModelLimit(q.modelId, activePolicies);
+                         
                          totalUsed += q.used;
-                         if (q.limit === 'unlimited') {
+                         
+                         if (effectiveLimit === 'unlimited') {
                            hasUnlimited = true;
                          } else {
-                           totalLimit += q.limit;
+                           totalLimit += effectiveLimit;
+                           if (q.used >= effectiveLimit) atLimitApps++;
                          }
                        });
 
-                       const percent = totalLimit > 0 ? Math.min(100, (totalUsed / totalLimit) * 100) : 0;
+                       const percent = (hasUnlimited || totalLimit === 0) ? (hasUnlimited ? 5 : 0) : Math.min(100, (totalUsed / totalLimit) * 100);
+                       const isCritical = atLimitApps > 0;
+                       const isWarning = !hasUnlimited && percent > 85;
+
+                       let statusConfig = {
+                         label: '状态正常',
+                         className: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+                         barColor: 'bg-emerald-500'
+                       };
+
+                       if (hasUnlimited) {
+                          statusConfig = {
+                           label: '无限畅用',
+                           className: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+                           barColor: 'bg-indigo-500'
+                         };
+                       } else if (isCritical) {
+                         statusConfig = {
+                           label: '已超额',
+                           className: 'bg-red-50 text-red-600 border-red-100',
+                           barColor: 'bg-red-500'
+                         };
+                       } else if (isWarning) {
+                         statusConfig = {
+                           label: '额度紧张',
+                           className: 'bg-orange-50 text-orange-600 border-orange-100',
+                           barColor: 'bg-orange-500'
+                         };
+                       }
                        
                        return (
                          <tr 
@@ -1494,33 +1503,47 @@ export const AdminDashboard: React.FC = () => {
                              </div>
                            </td>
                            <td className="p-5 align-middle">
-                             <div className="flex flex-col gap-1">
+                             <div className="flex flex-col gap-1.5">
                                <span className="text-sm font-bold text-slate-700">{user.department}</span>
-                               <div className="flex items-center gap-2">
-                                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${isOverride ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-500 border-slate-100'}`}>
-                                    <Layers size={10} /> {activePolicy?.name || '无策略'}
-                                 </span>
-                                 {isOverride && <span className="text-[10px] text-indigo-400 font-bold" title="该用户有特定策略覆盖">(覆盖)</span>}
+                               <div className="flex flex-wrap gap-1.5 max-w-[250px]">
+                                 {activePolicies.length > 0 ? activePolicies.map(p => {
+                                    const isDirect = p.appliedUserIds.includes(user.id);
+                                    return (
+                                       <span 
+                                         key={p.id} 
+                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${isDirect ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-500 border-slate-100'}`}
+                                         title={isDirect ? "特例分配 (叠加)" : p.targetAll ? "全局默认" : "部门默认"}
+                                       >
+                                          {isDirect ? <Zap size={10} /> : <Layers size={10} />}
+                                          {p.name}
+                                       </span>
+                                    );
+                                 }) : (
+                                    <span className="text-[10px] text-slate-400 font-medium italic">无策略</span>
+                                 )}
                                </div>
                              </div>
                            </td>
                            <td className="p-5 align-middle">
-                              <div className="w-full max-w-[140px]">
-                                 <div className="flex justify-between items-end text-xs mb-1.5">
-                                   <span className="font-bold text-slate-700">{formatNumber(totalUsed)}</span>
-                                   {hasUnlimited ? <Zap size={10} className="text-primary" fill="currentColor" /> : <span className="text-slate-400 font-medium">/ {formatNumber(totalLimit)}</span>}
+                              <div className="w-full max-w-[180px]">
+                                 <div className="flex items-center justify-between mb-2">
+                                     <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border uppercase tracking-wide ${statusConfig.className}`}>
+                                         {statusConfig.label}
+                                     </span>
+                                     <div className="text-xs font-bold text-slate-700">
+                                         {formatNumber(totalUsed)} <span className="text-slate-400 font-medium">/ {hasUnlimited ? '∞' : formatNumber(totalLimit)}</span>
+                                     </div>
                                  </div>
-                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
                                     {hasUnlimited ? (
-                                       <div className="h-full w-full bg-primary/40 stripe-bg"></div>
+                                       <div className={`h-full w-full stripe-bg opacity-30 ${statusConfig.barColor}`}></div>
                                     ) : (
                                        <div 
-                                         className={`h-full rounded-full transition-all duration-500 ${percent > 90 ? 'bg-red-500' : 'bg-primary'}`} 
+                                         className={`h-full rounded-full transition-all duration-500 ${statusConfig.barColor}`} 
                                          style={{ width: `${percent}%` }}
                                        ></div>
                                     )}
                                  </div>
-                                 {atLimitApps > 0 && <span className="text-[10px] text-red-500 font-bold mt-1 block">{atLimitApps} 应用超限</span>}
                               </div>
                            </td>
                          </tr>
