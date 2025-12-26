@@ -1,53 +1,77 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  ArrowLeft, UploadCloud, Globe, Zap, 
-  MessageSquare, Sliders, CheckCircle, 
-  FileCode, Play, Terminal, ShieldAlert,
-  Bot, Box, Workflow, Activity, Plus, Trash2,
-  FileText, AlignLeft, Paperclip, Cpu, Plug, 
-  BrainCircuit, Database, Search, Code2, Sparkles, X
+  ArrowLeft, Globe, Zap, 
+  MessageSquare, CheckCircle, 
+  Terminal, Bot, Box, Workflow, Activity, Plus, Trash2,
+  FileText, Cpu, Plug, 
+  BrainCircuit, Database, Search, Code2, Sparkles, X,
+  Key, Link, Settings2, Mic, Volume2, Lightbulb, Paperclip, AlertCircle, Loader2, ChevronRight, Edit3, 
+  MessageCircle, HelpCircle, Quote, ShieldCheck
 } from 'lucide-react';
 import { AppData, WorkflowInputDef } from '../types';
 
 interface CreateAppProps {
   onBack: () => void;
   onSubmit: (app: Partial<AppData>) => void;
+  initialData?: AppData | null;
 }
 
 type CreationType = 'selection' | 'external' | 'native';
 type ProviderType = 'dify' | 'n8n' | 'custom';
 type InteractionMode = 'chat' | 'workflow';
+type ConnectionStatus = 'idle' | 'testing' | 'success' | 'error';
 
-export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
-  const [creationType, setCreationType] = useState<CreationType>('selection');
+export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialData }) => {
+  // Determine initial creation type based on initialData
+  const getInitialCreationType = (): CreationType => {
+      if (!initialData) return 'selection';
+      return initialData.provider === 'native' ? 'native' : 'external';
+  };
+
+  const [creationType, setCreationType] = useState<CreationType>(getInitialCreationType());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [step, setStep] = useState(1);
 
   // Common Form State
   const [basicInfo, setBasicInfo] = useState({
-    name: '',
-    description: '',
-    iconBg: '#e0f2fe',
+    name: initialData?.name || '',
+    description: initialData?.description || '',
+    iconBg: initialData?.iconBg || '#e0f2fe',
     category: '效率工具小组',
   });
 
   // External Form State
   const [externalConfig, setExternalConfig] = useState({
-    provider: 'dify' as ProviderType,
-    mode: 'chat' as InteractionMode,
-    apiEndpoint: '',
-    apiKey: '',
-    workflowInputs: [] as WorkflowInputDef[],
+    provider: (initialData?.provider === 'native' ? 'dify' : initialData?.provider || 'dify') as ProviderType,
+    mode: (initialData?.mode || 'chat') as InteractionMode,
+    apiEndpoint: initialData?.apiEndpoint || 'http://agent.esrcloud.com/v1',
+    apiKey: initialData ? 'sk-********************' : '', // Masked key if editing
+    workflowInputs: initialData?.workflowInputs || [] as WorkflowInputDef[],
   });
+
+  // Connection Test State - Auto set to success if editing existing external app
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
+      initialData && initialData.provider !== 'native' ? 'success' : 'idle'
+  );
+  const [detectedCount, setDetectedCount] = useState(initialData?.workflowInputs?.length || 0);
+
+  // Capabilities State
+  const [capabilities, setCapabilities] = useState({
+    welcomeMessage: initialData?.capabilities?.welcomeMessage || false,
+    fileUpload: initialData?.capabilities?.fileUpload || false,
+    citations: initialData?.capabilities?.citations || false,
+  });
+
+  // Custom Content State
+  const [welcomeMessageContent, setWelcomeMessageContent] = useState(initialData?.welcomeMessage || '');
 
   // Native Form State
   const [nativeConfig, setNativeConfig] = useState({
-    modelId: 'gpt-4-turbo',
-    temperature: 0.7,
-    systemPrompt: '',
-    enableWebSearch: false,
-    enableCodeInterpreter: false,
-    knowledgeFiles: [] as string[], // Mock file names
+    modelId: initialData?.modelConfig?.modelId || 'gpt-4-turbo',
+    temperature: initialData?.modelConfig?.temperature || 0.7,
+    systemPrompt: initialData?.modelConfig?.systemPrompt || '',
+    enableWebSearch: initialData?.modelConfig?.enableWebSearch || false,
+    enableCodeInterpreter: initialData?.modelConfig?.enableCodeInterpreter || false,
+    knowledgeFiles: initialData?.modelConfig?.knowledgeBaseIds || [] as string[],
   });
 
   // --- Handlers ---
@@ -55,22 +79,27 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
   const handleExternalSubmit = () => {
     setIsSubmitting(true);
     setTimeout(() => {
+      // NOTE: We no longer merge file upload capability into workflowInputs.
+      // It is stored separately in 'capabilities'.
+
       onSubmit({
         ...basicInfo,
         provider: externalConfig.provider,
         mode: externalConfig.mode,
         apiEndpoint: externalConfig.apiEndpoint,
-        // Mock quota etc
         icon: externalConfig.provider === 'n8n' ? 'workflow' : 'bot',
         tag: externalConfig.mode === 'chat' ? '对话' : '自动化',
-        usersCount: '0',
-        likes: 0,
-        dislikes: 0,
-        favs: 0,
-        feedbacks: 0,
-        isFav: false,
-        quota: { limit: 100, used: 0, unit: '次' },
-        workflowInputs: (externalConfig.mode === 'workflow' || externalConfig.provider === 'dify') ? externalConfig.workflowInputs : undefined
+        // Preserve existing stats if editing, otherwise defaults
+        usersCount: initialData?.usersCount || '0',
+        likes: initialData?.likes || 0,
+        dislikes: initialData?.dislikes || 0,
+        favs: initialData?.favs || 0,
+        feedbacks: initialData?.feedbacks || 0,
+        isFav: initialData?.isFav || false,
+        quota: initialData?.quota || { limit: 100, used: 0, unit: '次' },
+        workflowInputs: externalConfig.workflowInputs, // Keep strictly defined variables
+        capabilities: capabilities, // Save capabilities separately
+        welcomeMessage: capabilities.welcomeMessage ? welcomeMessageContent : undefined
       });
       setIsSubmitting(false);
     }, 1500);
@@ -82,16 +111,19 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
       onSubmit({
         ...basicInfo,
         provider: 'native',
-        mode: 'chat', // Native builder currently supports Chat Agents
+        mode: 'chat',
         icon: 'gpt',
         tag: '原生',
-        usersCount: '0',
-        likes: 0,
-        dislikes: 0,
-        favs: 0,
-        feedbacks: 0,
-        isFav: false,
-        quota: { limit: 1000, used: 0, unit: 'Tokens' },
+        // Preserve existing stats if editing
+        usersCount: initialData?.usersCount || '0',
+        likes: initialData?.likes || 0,
+        dislikes: initialData?.dislikes || 0,
+        favs: initialData?.favs || 0,
+        feedbacks: initialData?.feedbacks || 0,
+        isFav: initialData?.isFav || false,
+        quota: initialData?.quota || { limit: 1000, used: 0, unit: 'Tokens' },
+        capabilities: { ...capabilities, fileUpload: true }, // Native always supports file upload (RAG/Analysis)
+        welcomeMessage: capabilities.welcomeMessage ? welcomeMessageContent : undefined,
         modelConfig: {
             modelId: nativeConfig.modelId,
             temperature: nativeConfig.temperature,
@@ -105,33 +137,68 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
     }, 1500);
   };
 
-  // --- External Workflow Input Helpers ---
-  const addWorkflowInput = (type: WorkflowInputDef['type']) => {
-    const newId = Date.now().toString();
-    const defaults: Partial<WorkflowInputDef> = { id: newId, type, required: true };
-    if (type === 'text') { defaults.label = '文本输入'; defaults.placeholder = '请输入...'; }
-    else if (type === 'file') { defaults.label = '上传文件'; defaults.accept = '.pdf,.docx'; }
-    else if (type === 'paragraph') { defaults.label = '长文本'; defaults.placeholder = '...'; }
+  const handleTestConnection = () => {
+    setConnectionStatus('testing');
     
-    setExternalConfig(prev => ({
-        ...prev,
-        workflowInputs: [...prev.workflowInputs, defaults as WorkflowInputDef]
-    }));
+    // Simulate API Call delay
+    setTimeout(() => {
+        setConnectionStatus('success');
+        
+        // Mock fetched variables based on provider
+        const mockInputs: WorkflowInputDef[] = externalConfig.provider === 'dify' 
+          ? [
+              { id: 'var_1', type: 'text', label: 'query', required: true, placeholder: '用户输入的问题' },
+              { id: 'var_2', type: 'select', label: 'style', required: false, options: ['Creative', 'Precise', 'Balanced'], placeholder: '回答风格' }
+            ]
+          : [
+              { id: 'var_n1', type: 'text', label: 'webhook_payload', required: true, placeholder: 'JSON Payload' },
+              { id: 'var_n2', type: 'text', label: 'email', required: true, placeholder: 'Recipient Email' }
+            ];
+        
+        setExternalConfig(prev => ({
+            ...prev,
+            workflowInputs: mockInputs
+        }));
+        setDetectedCount(mockInputs.length);
+    }, 1500);
   };
 
-  const removeWorkflowInput = (id: string) => {
-    setExternalConfig(prev => ({
-        ...prev,
-        workflowInputs: prev.workflowInputs.filter(i => i.id !== id)
-    }));
-  };
-
+  // --- External Workflow Input Helpers ---
   const updateWorkflowInput = (id: string, field: keyof WorkflowInputDef, value: any) => {
     setExternalConfig(prev => ({
         ...prev,
         workflowInputs: prev.workflowInputs.map(i => i.id === id ? { ...i, [field]: value } : i)
     }));
   };
+
+  const toggleCapability = (key: keyof typeof capabilities) => {
+    setCapabilities(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // --- Capability Config Definition ---
+  const capabilityDefinitions = [
+    {
+      id: 'welcomeMessage',
+      label: '对话开场白',
+      description: '在对话型应用中，让 AI 主动说第一段话可以拉近与用户间的距离。',
+      icon: <MessageCircle size={18} className="text-white" />,
+      iconBg: 'bg-blue-500',
+    },
+    {
+      id: 'fileUpload',
+      label: '文件上传',
+      description: '支持 document 格式解析', 
+      icon: <FileText size={18} className="text-white" />,
+      iconBg: 'bg-blue-600',
+    },
+    {
+      id: 'citations',
+      label: '引用和归属',
+      description: '显示源文档和生成内容的归属部分。',
+      icon: <Quote size={18} className="text-white" />,
+      iconBg: 'bg-orange-500',
+    }
+  ];
 
   // --- Render Sections ---
 
@@ -192,7 +259,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
                 <ul className="space-y-3 mb-8">
                    <li className="flex items-center gap-2 text-sm font-bold text-slate-600"><CheckCircle size={16} className="text-indigo-500" /> Dify Agent / Workflow</li>
                    <li className="flex items-center gap-2 text-sm font-bold text-slate-600"><CheckCircle size={16} className="text-indigo-500" /> n8n Automation</li>
-                   <li className="flex items-center gap-2 text-sm font-bold text-slate-600"><CheckCircle size={16} className="text-indigo-500" /> 支持自定义变量输入</li>
+                   <li className="flex items-center gap-2 text-sm font-bold text-slate-600"><CheckCircle size={16} className="text-indigo-500" /> 自动同步变量配置</li>
                 </ul>
                 <button className="px-6 py-3 rounded-xl bg-slate-50 text-slate-900 font-bold text-sm group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                    开始接入 &rarr;
@@ -229,26 +296,109 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
                placeholder="描述这个应用的功能、适用场景以及注意事项..."
              />
           </div>
-          <div>
-             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">所属部门</label>
-             <select 
-               value={basicInfo.category}
-               onChange={e => setBasicInfo({...basicInfo, category: e.target.value})}
-               className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all cursor-pointer"
-             >
-               <option>AI 基础架构组</option>
-               <option>效率工具小组</option>
-               <option>市场运营部</option>
-               <option>平台研发部</option>
-             </select>
-          </div>
        </div>
     </section>
+  );
+
+  const renderCapabilitiesSection = () => (
+    <div className="pl-11 grid grid-cols-1 gap-3">
+        {capabilityDefinitions.map(cap => {
+            const isEnabled = capabilities[cap.id as keyof typeof capabilities];
+            return (
+                <div key={cap.id} className={`flex flex-col p-4 bg-white border rounded-xl shadow-sm transition-all ${isEnabled ? 'border-primary/30 ring-1 ring-primary/10 bg-slate-50/50' : 'border-slate-200'}`}>
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                            <div className={`p-2.5 rounded-lg flex-shrink-0 ${cap.iconBg}`}>
+                                {cap.icon}
+                            </div>
+                            <div className="pt-0.5">
+                                <h4 className="font-bold text-slate-800 text-sm mb-1">{cap.label}</h4>
+                                <p className="text-xs text-slate-500 leading-relaxed max-w-sm">{cap.description}</p>
+                            </div>
+                        </div>
+                        
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                            <input 
+                                type="checkbox" 
+                                className="sr-only peer"
+                                checked={isEnabled}
+                                onChange={() => toggleCapability(cap.id as keyof typeof capabilities)}
+                            />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+
+                    {/* Extended UI for Welcome Message when enabled */}
+                    {cap.id === 'welcomeMessage' && isEnabled && (
+                        <div className="mt-4 pt-4 border-t border-slate-200/60 pl-[52px]">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">开场白内容</label>
+                            <textarea
+                                value={welcomeMessageContent}
+                                onChange={(e) => setWelcomeMessageContent(e.target.value)}
+                                className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-medium text-slate-700 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all resize-none h-24 placeholder:text-slate-400"
+                                placeholder="请输入 AI 的第一句问候语，例如：你好！我是您的专属助手..."
+                            />
+                        </div>
+                    )}
+
+                    {/* Extended UI for File Upload when enabled */}
+                    {cap.id === 'fileUpload' && isEnabled && (
+                        <div className="mt-4 pt-4 border-t border-slate-200/60 flex items-center gap-8 pl-[52px]">
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">支持的文件类型</span>
+                                <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">document</span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">最大上传数</span>
+                                <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">3</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        })}
+    </div>
   );
 
   const renderExternalConfig = () => (
     <>
       {renderBasicInfoSection()}
+
+      {/* App Type Selection */}
+      <section className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 delay-50">
+          <div className="pl-11">
+             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">应用类型</label>
+             <div className="flex gap-4">
+                <div 
+                  onClick={() => setExternalConfig(prev => ({...prev, mode: 'chat'}))}
+                  className={`flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${externalConfig.mode === 'chat' ? 'border-primary bg-primary-soft/30' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${externalConfig.mode === 'chat' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
+                        <MessageSquare size={16} />
+                    </div>
+                    <div>
+                        <div className="font-bold text-slate-700 text-sm">对话 (Chat)</div>
+                        <div className="text-xs text-slate-400">一问一答形式</div>
+                    </div>
+                    {externalConfig.mode === 'chat' && <CheckCircle size={16} className="ml-auto text-primary" />}
+                </div>
+
+                <div 
+                  onClick={() => setExternalConfig(prev => ({...prev, mode: 'workflow'}))}
+                  className={`flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${externalConfig.mode === 'workflow' ? 'border-primary bg-primary-soft/30' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${externalConfig.mode === 'workflow' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
+                        <Workflow size={16} />
+                    </div>
+                    <div>
+                        <div className="font-bold text-slate-700 text-sm">自动化 (Workflow)</div>
+                        <div className="text-xs text-slate-400">流程编排执行</div>
+                    </div>
+                     {externalConfig.mode === 'workflow' && <CheckCircle size={16} className="ml-auto text-primary" />}
+                </div>
+             </div>
+          </div>
+      </section>
 
       {/* Provider Selection */}
       <section className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 delay-100">
@@ -261,7 +411,10 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
             {['dify', 'n8n'].map(p => (
                 <div 
                   key={p}
-                  onClick={() => setExternalConfig(prev => ({ ...prev, provider: p as ProviderType, mode: p === 'n8n' ? 'workflow' : 'chat' }))}
+                  onClick={() => {
+                     setExternalConfig(prev => ({ ...prev, provider: p as ProviderType, mode: p === 'n8n' ? 'workflow' : 'chat' }));
+                     setConnectionStatus('idle'); // Reset connection status on provider change
+                  }}
                   className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all hover:scale-[1.02] ${externalConfig.provider === p ? 'border-indigo-500 bg-indigo-50 ring-4 ring-indigo-500/10' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                 >
                    <div className="w-10 h-10 rounded-lg bg-white border border-slate-100 flex items-center justify-center mb-3 text-slate-700">
@@ -274,70 +427,131 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
          </div>
       </section>
 
-      {/* Connection Config */}
+      {/* Connection Config & Fetch */}
       <section className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 delay-200">
          <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm">3</div>
-            <h3 className="text-lg font-bold text-slate-800">连接配置</h3>
+            <h3 className="text-lg font-bold text-slate-800">API 连接配置</h3>
          </div>
 
          <div className="pl-11 space-y-6">
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row gap-4 justify-between">
-               <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
-                     {externalConfig.mode === 'chat' ? <MessageSquare size={18} className="text-primary" /> : <Zap size={18} className="text-amber-500" />}
-                  </div>
-                  <div>
-                     <h4 className="font-bold text-slate-800 text-sm">交互模式</h4>
-                     <p className="text-xs text-slate-500">
-                       {externalConfig.mode === 'chat' ? '连续对话助手 (Agent)' : '表单触发任务 (Workflow)'}
-                     </p>
-                  </div>
-               </div>
-               <div className="flex bg-slate-200 p-1 rounded-lg">
-                  <button onClick={() => setExternalConfig(prev => ({...prev, mode: 'chat'}))} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${externalConfig.mode === 'chat' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>对话</button>
-                  <button onClick={() => setExternalConfig(prev => ({...prev, mode: 'workflow'}))} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${externalConfig.mode === 'workflow' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>任务流</button>
-               </div>
+            
+            {/* 3.1 Endpoint & Key Form */}
+            <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-200/60 space-y-5">
+                <div>
+                   <label className="flex items-center gap-2 text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">
+                      <Link size={12} /> API Endpoint
+                   </label>
+                   <input 
+                     value={externalConfig.apiEndpoint}
+                     onChange={e => setExternalConfig(prev => ({...prev, apiEndpoint: e.target.value}))}
+                     className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 font-mono text-sm text-slate-600 focus:text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                     placeholder="http://api.example.com/v1"
+                   />
+                </div>
+                
+                <div>
+                   <label className="flex items-center gap-2 text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">
+                      <Key size={12} /> API Key
+                   </label>
+                   <input 
+                     type="password"
+                     value={externalConfig.apiKey}
+                     onChange={e => setExternalConfig(prev => ({...prev, apiKey: e.target.value}))}
+                     className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 font-mono text-sm text-slate-600 focus:text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm tracking-widest"
+                     placeholder={initialData ? "不修改则留空" : "sk-........................"}
+                   />
+                </div>
+
+                <button 
+                  onClick={handleTestConnection}
+                  disabled={connectionStatus === 'testing' || !externalConfig.apiEndpoint}
+                  className={`w-full py-3.5 rounded-xl font-bold text-sm text-white shadow-lg transition-all flex items-center justify-center gap-2 ${connectionStatus === 'testing' ? 'bg-indigo-400 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:shadow-indigo-500/30 hover:scale-[1.01] active:scale-[0.99]'}`}
+                >
+                   {connectionStatus === 'testing' ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" /> 正在连接并获取配置...
+                      </>
+                   ) : (
+                      <>
+                        <Zap size={16} fill="currentColor" /> 测试连接并获取配置
+                      </>
+                   )}
+                </button>
+
+                {connectionStatus === 'success' && (
+                   <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                         <CheckCircle size={14} className="text-emerald-600" />
+                      </div>
+                      <span className="text-sm font-bold text-emerald-700">连接成功! 已获取到 {detectedCount} 个变量配置</span>
+                   </div>
+                )}
+                 {connectionStatus === 'error' && (
+                   <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                      <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                         <AlertCircle size={14} className="text-red-600" />
+                      </div>
+                      <span className="text-sm font-bold text-red-700">连接失败，请检查 Endpoint 或 Key 是否正确</span>
+                   </div>
+                )}
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-               <input 
-                 value={externalConfig.apiEndpoint}
-                 onChange={e => setExternalConfig(prev => ({...prev, apiEndpoint: e.target.value}))}
-                 className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 font-mono text-sm"
-                 placeholder="API Endpoint URL"
-               />
-               <input 
-                 type="password"
-                 value={externalConfig.apiKey}
-                 onChange={e => setExternalConfig(prev => ({...prev, apiKey: e.target.value}))}
-                 className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 font-mono text-sm"
-                 placeholder="API Key"
-               />
-            </div>
-            
-            {/* Dynamic Inputs for Workflow Mode or Dify (Prompt Variables) */}
-            {(externalConfig.mode === 'workflow' || externalConfig.provider === 'dify') && (
-                <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4">
-                    <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-4">
-                       {externalConfig.mode === 'workflow' ? '输入参数定义' : 'Prompt 变量定义'}
-                    </h4>
-                    <div className="space-y-3 mb-4">
-                        {externalConfig.workflowInputs.map((input, idx) => (
-                            <div key={input.id} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200">
-                                <span className="text-xs font-mono font-bold text-slate-400">#{idx+1}</span>
-                                <span className="text-xs font-bold uppercase bg-slate-100 px-2 py-0.5 rounded text-slate-600">{input.type}</span>
-                                <input value={input.label} onChange={(e) => updateWorkflowInput(input.id, 'label', e.target.value)} className="flex-1 text-sm font-bold border-b border-transparent focus:border-primary outline-none" />
-                                <button onClick={() => removeWorkflowInput(input.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
-                            </div>
-                        ))}
-                        {externalConfig.workflowInputs.length === 0 && <div className="text-center text-xs text-slate-400 py-2">暂无参数</div>}
+            {/* 3.2 Detected Variables */}
+            {connectionStatus === 'success' && (
+                <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 delay-100">
+                    <div className="flex items-center gap-3 mb-2">
+                       <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">4</div>
+                       <h3 className="text-lg font-bold text-slate-800">检测到的变量字段</h3>
                     </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => addWorkflowInput('text')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:border-primary">Text</button>
-                        <button onClick={() => addWorkflowInput('paragraph')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:border-primary">Paragraph</button>
-                        <button onClick={() => addWorkflowInput('file')} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:border-primary">File</button>
+
+                    <div className="pl-11 space-y-3">
+                       {externalConfig.workflowInputs.length === 0 ? (
+                          <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                             <p className="text-sm font-medium text-slate-400">未检测到需要输入的变量</p>
+                          </div>
+                       ) : (
+                          externalConfig.workflowInputs.map((input, idx) => (
+                             <div key={input.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col gap-2 relative group">
+                                <div className="flex justify-between items-start">
+                                   <div className="flex items-center gap-2">
+                                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-mono font-bold rounded uppercase border border-indigo-100">
+                                         {input.label}
+                                      </span>
+                                      {input.required && <span className="text-red-500 text-xs font-bold">*</span>}
+                                   </div>
+                                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{input.type}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                   <input 
+                                     value={input.label} // Editing the displayed label
+                                     onChange={(e) => updateWorkflowInput(input.id, 'label', e.target.value)}
+                                     className="font-bold text-slate-700 text-sm border-b border-transparent hover:border-slate-200 focus:border-indigo-500 outline-none bg-transparent transition-colors w-full"
+                                     placeholder="Display Name"
+                                   />
+                                   <Edit3 size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                                {input.options && (
+                                   <div className="text-xs text-slate-400 flex gap-1 items-center">
+                                      <span>选项:</span> {input.options.join(', ')}
+                                   </div>
+                                )}
+                             </div>
+                          ))
+                       )}
                     </div>
+                </div>
+            )}
+
+            {/* 3.3 Function Config */}
+            {connectionStatus === 'success' && (
+                <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 delay-200">
+                    <div className="flex items-center gap-3 mb-2">
+                       <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">5</div>
+                       <h3 className="text-lg font-bold text-slate-800">功能配置</h3>
+                    </div>
+
+                    {renderCapabilitiesSection()}
                 </div>
             )}
          </div>
@@ -346,10 +560,10 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
       <div className="pl-11 pt-4 pb-20">
          <button 
            onClick={handleExternalSubmit}
-           disabled={isSubmitting || !basicInfo.name}
-           className="px-8 py-3.5 rounded-2xl font-bold text-sm bg-slate-900 text-white hover:bg-slate-800 shadow-xl flex items-center gap-2"
+           disabled={isSubmitting || !basicInfo.name || connectionStatus !== 'success'}
+           className={`px-8 py-3.5 rounded-2xl font-bold text-sm shadow-xl flex items-center gap-2 transition-all ${isSubmitting || !basicInfo.name || connectionStatus !== 'success' ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-slate-800 hover:shadow-2xl hover:-translate-y-0.5'}`}
          >
-           {isSubmitting ? '正在连接...' : <>确认接入 <Plug size={16} /></>}
+           {isSubmitting ? '正在保存...' : <>{initialData ? '保存修改' : '确认接入并创建'} <Plug size={16} /></>}
          </button>
       </div>
     </>
@@ -374,7 +588,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
                      <Cpu className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                      <select 
                        value={nativeConfig.modelId}
-                       onChange={e => setNativeConfig(prev => ({...prev, modelId: e.target.value}))}
+                       onChange={e => setNativeConfig(prev => ({...prev,modelId: e.target.value}))}
                        className="w-full pl-11 pr-4 py-3 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 outline-none focus:border-primary appearance-none cursor-pointer"
                      >
                         <option value="gpt-4-turbo">GPT-4 Turbo (OpenAI)</option>
@@ -491,7 +705,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
            disabled={isSubmitting || !basicInfo.name}
            className="px-8 py-3.5 rounded-2xl font-bold text-sm bg-slate-900 text-white hover:bg-slate-800 shadow-xl flex items-center gap-2"
          >
-           {isSubmitting ? '正在创建...' : <>创建智能体 <BrainCircuit size={16} /></>}
+           {isSubmitting ? '正在创建...' : <>{initialData ? '保存修改' : '创建智能体'} <BrainCircuit size={16} /></>}
          </button>
       </div>
     </>
@@ -518,14 +732,14 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
             {/* Nav Header */}
             <div className="mb-10 flex items-center justify-between">
                <div>
-                 <button onClick={() => setCreationType('selection')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors text-sm font-bold mb-6">
-                   <ArrowLeft size={16} /> 返回类型选择
+                 <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors text-sm font-bold mb-6">
+                   <ArrowLeft size={16} /> 返回{initialData ? '工作台' : '类型选择'}
                  </button>
                  <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
-                    {isNative ? '创建原生智能体' : '接入外部应用'}
+                    {initialData ? '编辑应用配置' : (isNative ? '创建原生智能体' : '接入外部应用')}
                  </h1>
                  <p className="text-slate-500 text-lg">
-                    {isNative ? '编排 Prompt 并配置知识库。' : '配置 API 连接信息与参数。'}
+                    {isNative ? '编排 Prompt 并配置知识库。' : '配置 API 连接信息以获取变量。'}
                  </p>
                </div>
                <div className="hidden md:block">
@@ -566,7 +780,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
                       {isNative ? '原生' : (externalConfig.mode === 'chat' ? '对话' : '自动化')}
                     </span>
                     <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-50/50 px-2 py-1 rounded-md">
-                       <Activity size={12} /> 0
+                       <Activity size={12} /> {initialData?.usersCount || 0}
                     </div>
                  </div>
              </div>
@@ -617,7 +831,8 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit }) => {
                     <>
                         <div className="flex justify-between"><span>Type:</span> <span>External</span></div>
                         <div className="flex justify-between"><span>Provider:</span> <span>{externalConfig.provider}</span></div>
-                        <div className="flex justify-between"><span>Mode:</span> <span>{externalConfig.mode}</span></div>
+                        <div className="flex justify-between"><span>Vars Detected:</span> <span>{detectedCount}</span></div>
+                        <div className="flex justify-between"><span>Connection:</span> <span className={connectionStatus === 'success' ? 'text-emerald-500' : 'text-slate-400'}>{connectionStatus.toUpperCase()}</span></div>
                     </>
                 )}
              </div>

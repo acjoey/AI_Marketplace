@@ -71,6 +71,13 @@ const INITIAL_APPS: AppData[] = [
     tag: '内容',
     mode: 'chat',
     status: 'published',
+    // ADDED: Dynamic configuration inputs
+    workflowInputs: [
+      { id: 'topic', type: 'text', label: '营销主题', required: true, placeholder: '例如：夏季新品发布会' },
+      { id: 'platform', type: 'select', label: '发布平台', required: true, options: ['微信公众号', '小红书', 'LinkedIn', 'Twitter'] },
+      { id: 'tone', type: 'select', label: '文案语气', required: false, options: ['专业严谨', '幽默风趣', '激情澎湃', '温馨感人'] },
+      { id: 'ref_doc', type: 'file', label: '参考资料 (选填)', required: false, accept: '.pdf,.docx' }
+    ],
     creator: '市场运营部',
     lastUpdater: '王五',
     usersCount: '2.5k',
@@ -116,6 +123,9 @@ export default function App() {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [feedbackApp, setFeedbackApp] = useState<AppData | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  
+  // Edit State
+  const [editingApp, setEditingApp] = useState<AppData | null>(null);
 
   const currentUser = 'Admin User'; // Mock current user
 
@@ -172,32 +182,51 @@ export default function App() {
     ));
   };
 
-  const handleCreateApp = (newAppData: Partial<AppData>) => {
-    const newApp: AppData = {
-      id: `new_${Date.now()}`,
-      name: newAppData.name || 'New App',
-      description: newAppData.description || '',
-      icon: newAppData.icon || 'zap',
-      iconBg: '#f0fdfa', // Default color
-      iconColor: '#0f766e',
-      tag: newAppData.tag || 'New',
-      creator: currentUser,
-      lastUpdater: currentUser,
-      usersCount: '0',
-      likes: 0,
-      dislikes: 0,
-      favs: 0,
-      feedbacks: 0,
-      myVote: null,
-      isFav: false,
-      quota: { limit: 100, used: 0, unit: '次' },
-      status: 'draft', // Default to draft
-      ...newAppData
-    } as AppData;
+  const handleStartCreate = () => {
+    setEditingApp(null);
+    setView('create-app');
+  };
 
-    setApps(prev => [newApp, ...prev]);
+  const handleEditApp = (app: AppData) => {
+    setEditingApp(app);
+    setView('create-app');
+  };
+
+  const handleSaveApp = (appData: Partial<AppData>) => {
+    if (editingApp) {
+        // Update existing app
+        setApps(prev => prev.map(a => a.id === editingApp.id ? { ...a, ...appData, lastUpdater: currentUser } : a));
+        showToast('应用配置已更新');
+    } else {
+        // Create new app
+        const newApp: AppData = {
+          id: `new_${Date.now()}`,
+          name: appData.name || 'New App',
+          description: appData.description || '',
+          icon: appData.icon || 'zap',
+          iconBg: '#f0fdfa', // Default color
+          iconColor: '#0f766e',
+          tag: appData.tag || 'New',
+          creator: currentUser,
+          lastUpdater: currentUser,
+          usersCount: '0',
+          likes: 0,
+          dislikes: 0,
+          favs: 0,
+          feedbacks: 0,
+          myVote: null,
+          isFav: false,
+          quota: { limit: 100, used: 0, unit: '次' },
+          status: 'draft', // Default to draft
+          ...appData
+        } as AppData;
+    
+        setApps(prev => [newApp, ...prev]);
+        showToast(`应用 "${newApp.name}" 已创建，请在工作台调试后发布`);
+    }
+    
+    setEditingApp(null);
     setView('workbench'); // Redirect to Workbench
-    showToast(`应用 "${newApp.name}" 已创建，请在工作台调试后发布`);
   };
 
   const handleTogglePublish = (app: AppData) => {
@@ -233,23 +262,23 @@ export default function App() {
           <button 
             onClick={() => setView('marketplace')}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all duration-300 ${
-              view === 'marketplace' || view === 'chat' || view === 'create-app' || view === 'workflow'
+              view === 'marketplace' || view === 'chat' || (view === 'create-app' && !editingApp) || view === 'workflow'
                 ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' 
                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
             }`}
           >
-            <LayoutGrid size={16} className={view === 'marketplace' || view === 'chat' || view === 'create-app' || view === 'workflow' ? 'text-primary' : ''} /> 应用广场
+            <LayoutGrid size={16} className={view === 'marketplace' || view === 'chat' || (view === 'create-app' && !editingApp) || view === 'workflow' ? 'text-primary' : ''} /> 应用广场
           </button>
           
           <button 
             onClick={() => setView('workbench')}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all duration-300 ${
-              view === 'workbench'
+              view === 'workbench' || (view === 'create-app' && editingApp)
                 ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' 
                 : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
             }`}
           >
-            <Wrench size={16} className={view === 'workbench' ? 'text-primary' : ''} /> 我的工作台
+            <Wrench size={16} className={view === 'workbench' || (view === 'create-app' && editingApp) ? 'text-primary' : ''} /> 我的工作台
           </button>
 
           <button 
@@ -283,13 +312,14 @@ export default function App() {
             onVote={handleVote}
             onToggleFav={handleToggleFav}
             onFeedback={openFeedback}
-            onCreateApp={() => setView('create-app')}
+            onCreateApp={handleStartCreate}
           />
         )}
         {view === 'create-app' && (
           <CreateApp 
-            onBack={() => setView('marketplace')}
-            onSubmit={handleCreateApp}
+            onBack={() => { setView('workbench'); setEditingApp(null); }}
+            onSubmit={handleSaveApp}
+            initialData={editingApp}
           />
         )}
         {view === 'workbench' && (
@@ -297,9 +327,10 @@ export default function App() {
               apps={apps}
               currentUser={currentUser}
               onOpenApp={handleOpenApp}
-              onCreateApp={() => setView('create-app')}
+              onCreateApp={handleStartCreate}
               onTogglePublish={handleTogglePublish}
               onDeleteApp={handleDeleteApp}
+              onEditApp={handleEditApp}
             />
         )}
         {view === 'chat' && selectedApp && (

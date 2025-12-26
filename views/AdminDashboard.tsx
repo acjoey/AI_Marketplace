@@ -5,7 +5,8 @@ import {
   Layers, Activity,
   Sliders, Trash2, 
   BarChart2, DollarSign, Database, ArrowUpDown, 
-  Cpu, Globe, UserCog, Edit3, X, Building2, Plus, Check, AlertTriangle, Shield, Crown, Wand2, Zap
+  Cpu, Globe, UserCog, Edit3, X, Building2, Plus, Check, AlertTriangle, Shield, Crown, Wand2, Zap,
+  ChevronRight, ChevronDown, FolderTree
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -51,6 +52,7 @@ interface Department {
   id: string;
   name: string;
   memberCount: number;
+  children?: Department[]; // Added for hierarchy
 }
 
 interface RoleDefinition {
@@ -126,9 +128,23 @@ const INITIAL_ROLE_CONFIG: RoleDefinition[] = [
   }
 ];
 
+// Updated Department Data with Hierarchy
 const INITIAL_DEPARTMENTS: Department[] = [
-  { id: 'd1', name: '产品部', memberCount: 12 },
-  { id: 'd2', name: '研发部', memberCount: 45 },
+  { 
+    id: 'd1', name: '产品部', memberCount: 12,
+    children: [
+        { id: 'd1-1', name: '企微产品线', memberCount: 5 },
+        { id: 'd1-2', name: 'SaaS产品线', memberCount: 7 }
+    ] 
+  },
+  { 
+    id: 'd2', name: '研发部', memberCount: 45,
+    children: [
+        { id: 'd2-1', name: '后端组', memberCount: 20 },
+        { id: 'd2-2', name: '前端组', memberCount: 15 },
+        { id: 'd2-3', name: '测试组', memberCount: 10 }
+    ]
+  },
   { id: 'd3', name: '市场部', memberCount: 8 },
   { id: 'd4', name: '人事部', memberCount: 5 },
 ];
@@ -278,20 +294,124 @@ const RoleEditModal: React.FC<{
   );
 };
 
-// 2. Policy Edit Modal
+// 2. Department Selector Modal (NEW)
+const DepartmentSelectorModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  departments: Department[];
+  selectedDepartments: string[]; // List of department NAMES (as per current app logic)
+  onConfirm: (selected: string[]) => void;
+}> = ({ isOpen, onClose, departments, selectedDepartments, onConfirm }) => {
+  const [tempSelected, setTempSelected] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isOpen) setTempSelected(selectedDepartments);
+  }, [isOpen, selectedDepartments]);
+
+  if (!isOpen) return null;
+
+  const toggleSelection = (deptName: string) => {
+    setTempSelected(prev => 
+      prev.includes(deptName) 
+        ? prev.filter(n => n !== deptName)
+        : [...prev, deptName]
+    );
+  };
+
+  const RecursiveDeptItem: React.FC<{ dept: Department; level: number }> = ({ dept, level }) => {
+     const isSelected = tempSelected.includes(dept.name);
+     const [isExpanded, setIsExpanded] = useState(true);
+     const hasChildren = dept.children && dept.children.length > 0;
+
+     return (
+        <div className="select-none">
+           <div 
+             className={`flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group`}
+             style={{ paddingLeft: `${level * 20 + 8}px` }}
+             onClick={() => toggleSelection(dept.name)}
+           >
+              {hasChildren ? (
+                 <button 
+                   onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                   className="p-0.5 rounded hover:bg-slate-200 text-slate-400"
+                 >
+                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                 </button>
+              ) : (
+                 <div className="w-4 h-4"></div> // Spacer
+              )}
+              
+              <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300 group-hover:border-indigo-400'}`}>
+                 {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+              </div>
+              
+              <div className="flex items-center gap-2">
+                 <Building2 size={16} className={isSelected ? 'text-indigo-600' : 'text-slate-400'} />
+                 <span className={`text-sm ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{dept.name}</span>
+              </div>
+           </div>
+           
+           {hasChildren && isExpanded && (
+              <div>
+                 {dept.children!.map(child => (
+                    <RecursiveDeptItem key={child.id} dept={child} level={level + 1} />
+                 ))}
+              </div>
+           )}
+        </div>
+     );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[600px] ring-1 ring-black/5">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <FolderTree size={18} className="text-indigo-600" />
+            选择应用部门
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-slate-200/50 rounded-full text-slate-400"><X size={18} /></button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-1">
+           {departments.map(dept => (
+              <RecursiveDeptItem key={dept.id} dept={dept} level={0} />
+           ))}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button>
+            <button 
+              onClick={() => onConfirm(tempSelected)} 
+              className="px-6 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all"
+            >
+              确认 ({tempSelected.length})
+            </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// 3. Policy Edit Modal
 const PolicyEditModal: React.FC<{
   policy: Policy | null;
   departments: Department[];
   users: User[];
+  policies: Policy[]; 
   isOpen: boolean;
   onClose: () => void;
   onSave: (policy: Policy) => void;
-}> = ({ policy, departments, users, isOpen, onClose, onSave }) => {
+}> = ({ policy, departments, users, policies, isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState<Policy>({
     id: '', name: '', description: '', modelQuotas: [], appliedDepartments: [], appliedUserIds: [], targetAll: false
   });
   const [activeTab, setActiveTab] = useState<'basics' | 'assignments'>('basics');
   const [userSearch, setUserSearch] = useState('');
+  
+  // New State for Department Selector
+  const [isDeptSelectorOpen, setIsDeptSelectorOpen] = useState(false);
 
   useEffect(() => {
     if (policy) {
@@ -324,11 +444,16 @@ const PolicyEditModal: React.FC<{
     setFormData({ ...formData, modelQuotas: newQuotas });
   };
 
-  const toggleDepartment = (deptName: string) => {
-    const newDepts = formData.appliedDepartments.includes(deptName)
-      ? formData.appliedDepartments.filter(d => d !== deptName)
-      : [...formData.appliedDepartments, deptName];
+  // Modified: Toggle removed, now just handles removing specific deps
+  const removeDepartment = (deptName: string) => {
+    const newDepts = formData.appliedDepartments.filter(d => d !== deptName);
     setFormData({ ...formData, appliedDepartments: newDepts });
+  };
+
+  // Modified: Handle confirmation from modal
+  const handleDeptConfirm = (selected: string[]) => {
+      setFormData({ ...formData, appliedDepartments: selected });
+      setIsDeptSelectorOpen(false);
   };
 
   const toggleUser = (userId: string) => {
@@ -343,7 +468,61 @@ const PolicyEditModal: React.FC<{
   // Get selected user objects for display
   const selectedUserObjects = users.filter(u => formData.appliedUserIds.includes(u.id));
 
+  // Helper to render tree of SELECTED items only
+  const renderSelectedTree = (nodes: Department[], level = 0): React.ReactNode => {
+      return nodes.map(node => {
+          const isSelected = formData.appliedDepartments.includes(node.name);
+          // Check if any children (deep) are selected to decide if we show this parent container
+          const hasSelectedDescendant = (n: Department): boolean => {
+              if (n.children) {
+                  return n.children.some(c => formData.appliedDepartments.includes(c.name) || hasSelectedDescendant(c));
+              }
+              return false;
+          };
+          
+          const showNode = isSelected || hasSelectedDescendant(node);
+
+          if (!showNode) return null;
+
+          return (
+              <div key={node.id} className="relative">
+                  {/* Vertical line connector for children */}
+                  {level > 0 && (
+                      <div className="absolute left-[-14px] top-0 bottom-0 w-px bg-slate-200"></div>
+                  )}
+                  {level > 0 && (
+                      <div className="absolute left-[-14px] top-3.5 w-3 h-px bg-slate-200"></div>
+                  )}
+
+                  <div 
+                      className={`flex items-center justify-between p-2 rounded-lg mb-1 border ${isSelected ? 'bg-indigo-50 border-indigo-100' : 'bg-transparent border-transparent'}`}
+                      style={{ marginLeft: level > 0 ? '4px' : '0' }}
+                  >
+                      <div className="flex items-center gap-2">
+                           <Building2 size={16} className={isSelected ? 'text-indigo-600' : 'text-slate-300'} />
+                           <span className={`text-sm ${isSelected ? 'font-bold text-slate-800' : 'text-slate-500'}`}>{node.name}</span>
+                      </div>
+                      {isSelected && (
+                          <button 
+                            onClick={() => removeDepartment(node.name)}
+                            className="p-1 hover:bg-red-100 rounded text-slate-300 hover:text-red-500 transition-colors"
+                          >
+                             <Trash2 size={14} />
+                          </button>
+                      )}
+                  </div>
+                  {node.children && (
+                      <div className="pl-6 border-l border-slate-100/0 ml-2">
+                          {renderSelectedTree(node.children, level + 1)}
+                      </div>
+                  )}
+              </div>
+          );
+      });
+  };
+
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] ring-1 ring-black/5">
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -469,26 +648,30 @@ const PolicyEditModal: React.FC<{
                   )}
                </div>
 
-               {/* 2. Department Selector */}
+               {/* 2. Department Selector - Modified for Tree View & Add Button */}
                <div className={`space-y-3 transition-opacity ${formData.targetAll ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                  <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">应用部门 (部门级默认)</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    {departments.map(dept => {
-                      const isSelected = formData.appliedDepartments.includes(dept.name);
-                      return (
-                        <div 
-                          key={dept.id}
-                          onClick={() => toggleDepartment(dept.name)}
-                          className={`p-3 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${isSelected ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200'}`}
-                        >
-                           <div className="flex items-center gap-2">
-                              <Building2 size={16} className={isSelected ? 'text-indigo-600' : 'text-slate-400'} />
-                              <span className="text-sm font-bold">{dept.name}</span>
-                           </div>
-                           {isSelected && <CheckCircle size={16} className="text-indigo-600" />}
+                  <div className="flex justify-between items-end">
+                      <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">应用部门 (部门级默认)</h4>
+                      <button 
+                        onClick={() => setIsDeptSelectorOpen(true)}
+                        className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"
+                      >
+                         <Plus size={14} /> 添加部门
+                      </button>
+                  </div>
+                  
+                  {/* Tree Display of Selected */}
+                  <div className="min-h-[100px] p-3 border border-slate-200 rounded-xl bg-slate-50/30">
+                     {formData.appliedDepartments.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-300 py-4">
+                           <FolderTree size={24} className="mb-2 opacity-50" />
+                           <span className="text-xs font-bold">暂无选择部门</span>
                         </div>
-                      )
-                    })}
+                     ) : (
+                        <div className="space-y-1">
+                           {renderSelectedTree(departments)}
+                        </div>
+                     )}
                   </div>
                </div>
 
@@ -496,8 +679,11 @@ const PolicyEditModal: React.FC<{
 
                {/* 3. User Selector */}
                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">特例用户 (强制分配 - 优先级最高)</h4>
+                  <div className="flex justify-between items-end">
+                    <div>
+                        <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">特例用户 (强制分配 - 优先级最高)</h4>
+                        <p className="text-[10px] text-slate-400 mt-1">注意：选中已被其他策略绑定的用户，将自动将其迁移至此策略。</p>
+                    </div>
                   </div>
                   
                   {/* Selected Users Display - NEW */}
@@ -530,26 +716,39 @@ const PolicyEditModal: React.FC<{
                      />
                   </div>
 
-                  <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
                      {filteredUsers.length === 0 && <div className="text-center py-4 text-xs text-slate-400">无匹配用户</div>}
                      {filteredUsers.map(user => {
                        const isSelected = formData.appliedUserIds.includes(user.id);
+                       
+                       // Check if user is assigned to ANOTHER policy (Logic: User has assignedID, and it's NOT current form ID)
+                       const assignedToOtherId = user.assignedPolicyId && user.assignedPolicyId !== formData.id ? user.assignedPolicyId : null;
+                       // Look up the name from policies prop
+                       const otherPolicyName = assignedToOtherId ? policies.find(p => p.id === assignedToOtherId)?.name : null;
+
                        return (
                          <div 
                            key={user.id}
                            onClick={() => toggleUser(user.id)}
-                           className={`p-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}
+                           className={`p-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-slate-50 border border-transparent'}`}
                          >
                             <div className="flex items-center gap-2">
                                <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold flex items-center justify-center">
                                  {user.name.charAt(0)}
                                </div>
                                <div className="flex flex-col">
-                                 <span className="text-xs font-bold text-slate-700">{user.name}</span>
+                                 <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-700">{user.name}</span>
+                                    {otherPolicyName && !isSelected && (
+                                        <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 flex items-center gap-0.5" title="点击选择将强制更改其策略">
+                                            <AlertTriangle size={8} /> 已绑定: {otherPolicyName}
+                                        </span>
+                                    )}
+                                 </div>
                                  <span className="text-[10px] text-slate-400">{user.email}</span>
                                </div>
                             </div>
-                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
                                {isSelected && <Check size={10} className="text-white" />}
                             </div>
                          </div>
@@ -567,6 +766,15 @@ const PolicyEditModal: React.FC<{
         </div>
       </div>
     </div>
+    
+    <DepartmentSelectorModal 
+        isOpen={isDeptSelectorOpen}
+        onClose={() => setIsDeptSelectorOpen(false)}
+        departments={departments}
+        selectedDepartments={formData.appliedDepartments}
+        onConfirm={handleDeptConfirm}
+    />
+    </>
   );
 };
 
@@ -625,50 +833,81 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleSavePolicy = (newPolicy: Policy) => {
+    // 1. Update Policies List (Enforce Mutually Exclusive User Assignments)
     setPolicies(prev => {
+      // Determine if the policy already exists
       const exists = prev.find(p => p.id === newPolicy.id);
+      
       let updatedPolicies = prev;
+      
       if (exists) {
-        updatedPolicies = prev.map(p => p.id === newPolicy.id ? newPolicy : p);
+        // Update existing
+        updatedPolicies = prev.map(p => {
+           if (p.id === newPolicy.id) return newPolicy;
+           
+           // CRITICAL LOGIC: If 'newPolicy' claims users, remove them from 'p'
+           const conflictUsers = p.appliedUserIds.filter(uid => newPolicy.appliedUserIds.includes(uid));
+           if (conflictUsers.length > 0) {
+               return {
+                   ...p,
+                   appliedUserIds: p.appliedUserIds.filter(uid => !newPolicy.appliedUserIds.includes(uid))
+               };
+           }
+           return p;
+        });
       } else {
-        updatedPolicies = [...prev, newPolicy];
+        // Add new policy
+        // Also need to clean other policies if the new policy claims existing users
+        const othersCleaned = prev.map(p => {
+            const conflictUsers = p.appliedUserIds.filter(uid => newPolicy.appliedUserIds.includes(uid));
+            if (conflictUsers.length > 0) {
+                return {
+                    ...p,
+                    appliedUserIds: p.appliedUserIds.filter(uid => !newPolicy.appliedUserIds.includes(uid))
+                };
+            }
+            return p;
+        });
+        updatedPolicies = [...othersCleaned, newPolicy];
       }
       return updatedPolicies;
     });
 
-    // CASCADE UPDATE: Update Users based on Assignments in Policy hierarchy
+    // 2. Cascade Update Users based on Assignments
+    // We do this based on the *newPolicy* data primarily, but we also rely on the *updated policies* list logic conceptually.
+    // However, since we update state asynchronously, we calculate the logic here.
+    
     setUsers(prev => prev.map(u => {
-      // 1. Check if specific user is targeted by the NEW/UPDATED policy
       let assignedPolicyId = u.assignedPolicyId;
 
+      // Logic A: If user is in the NEW policy's explicit list -> Force assign to new policy
       if (newPolicy.appliedUserIds.includes(u.id)) {
-         assignedPolicyId = newPolicy.id; // Enforce priority
-      } else if (u.assignedPolicyId === newPolicy.id && !newPolicy.appliedUserIds.includes(u.id)) {
-         // Was manually assigned to this policy, but now removed from list -> Clear manual assignment
-         assignedPolicyId = undefined;
+         assignedPolicyId = newPolicy.id;
+      } 
+      // Logic B: If user WAS assigned to this policy ID, but is NO LONGER in the list -> Remove assignment
+      else if (u.assignedPolicyId === newPolicy.id && !newPolicy.appliedUserIds.includes(u.id)) {
+         assignedPolicyId = undefined; 
       }
-
-      // Re-evaluate best policy based on updated state
-      // Hierarchy: Assigned ID > Department > Global
+      // Logic C: User was assigned to ANOTHER policy, but that policy just lost the user in step 1?
+      // Actually, since we update `assignedPolicyId` based on `newPolicy.appliedUserIds.includes(u.id)`,
+      // if they are moved, Logic A handles it.
+      
+      // Re-evaluate effective quota (Visual refresh)
       let effectivePolicy = null;
-
-      // Check Assigned ID (could be the new policy or another one)
       if (assignedPolicyId) {
          effectivePolicy = (assignedPolicyId === newPolicy.id) ? newPolicy : policies.find(p => p.id === assignedPolicyId);
+         // Note: `policies` here is stale (previous state), but for IDs other than newPolicy, config hasn't changed aside from appliedUserIds list.
+         // Since we trust assignedPolicyId ID, it's fine.
       }
       
-      // If no specific assignment, check department
       if (!effectivePolicy) {
-         // Is the user's department in the new policy?
          if (newPolicy.appliedDepartments.includes(u.department)) {
             effectivePolicy = newPolicy;
          } else {
-            // Check other policies for department match
             effectivePolicy = policies.find(p => p.id !== newPolicy.id && p.appliedDepartments.includes(u.department));
          }
       }
 
-      // If still no policy, check Global
       if (!effectivePolicy) {
          if (newPolicy.targetAll) {
             effectivePolicy = newPolicy;
@@ -1169,6 +1408,7 @@ export const AdminDashboard: React.FC = () => {
         policy={editingPolicy}
         departments={departments}
         users={users}
+        policies={policies} // Passed policies prop
         isOpen={isPolicyModalOpen}
         onClose={() => setIsPolicyModalOpen(false)}
         onSave={handleSavePolicy}

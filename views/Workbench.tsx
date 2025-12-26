@@ -13,10 +13,11 @@ interface WorkbenchProps {
   onCreateApp: () => void;
   onTogglePublish: (app: AppData) => void;
   onDeleteApp: (id: string) => void;
+  onEditApp: (app: AppData) => void; // Added onEditApp prop
 }
 
 export const Workbench: React.FC<WorkbenchProps> = ({ 
-  apps, currentUser, onOpenApp, onCreateApp, onTogglePublish, onDeleteApp 
+  apps, currentUser, onOpenApp, onCreateApp, onTogglePublish, onDeleteApp, onEditApp 
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'published' | 'draft'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -135,8 +136,6 @@ export const Workbench: React.FC<WorkbenchProps> = ({
                       <div>使用: <span className="text-slate-700">{app.usersCount}</span></div>
                       <div className="w-px h-3 bg-slate-200"></div>
                       <div>点赞: <span className="text-slate-700">{app.likes}</span></div>
-                      <div className="w-px h-3 bg-slate-200"></div>
-                      <div>配额: <span className="text-slate-700">{app.quota.limit === 'unlimited' ? '∞' : app.quota.limit}</span></div>
                    </div>
 
                    {/* Actions */}
@@ -166,7 +165,10 @@ export const Workbench: React.FC<WorkbenchProps> = ({
                    </div>
                    
                    <div className="flex items-center justify-between mt-3 px-1">
-                      <button className="text-[10px] font-bold text-slate-400 hover:text-primary flex items-center gap-1">
+                      <button 
+                         onClick={() => onEditApp(app)}
+                         className="text-[10px] font-bold text-slate-400 hover:text-primary flex items-center gap-1"
+                      >
                          <Edit3 size={12} /> 编辑配置
                       </button>
                       <button 

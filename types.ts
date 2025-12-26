@@ -9,6 +9,12 @@ export interface WorkflowInputDef {
   placeholder?: string;
 }
 
+export interface AppCapabilities {
+  fileUpload: boolean;
+  welcomeMessage: boolean; // 对话开场白开关
+  citations: boolean; // 引用和归属
+}
+
 export interface AppData {
   id: string;
   name: string;
@@ -44,6 +50,12 @@ export interface AppData {
   // Workflow Specific
   workflowInputs?: WorkflowInputDef[];
 
+  // Feature Flags
+  capabilities?: AppCapabilities;
+  
+  // Custom Content
+  welcomeMessage?: string; // Custom welcome message content
+
   // Native Agent Specific
   modelConfig?: {
     modelId: string;
@@ -62,6 +74,7 @@ export interface Message {
   role: 'user' | 'ai';
   content: string;
   timestamp: number;
+  attachments?: { name: string; type: string }[];
 }
 
 export interface Thread {
