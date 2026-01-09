@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ArrowLeft, Send, Paperclip, 
   Sparkles, ShieldCheck, 
   Plus, Zap, AlertTriangle,
   Pin, PinOff, MoreHorizontal, Trash2,
-  Bot, SlidersHorizontal, Settings2, ChevronDown, ChevronUp, File, X
+  Bot, SlidersHorizontal, Settings2, ChevronDown, ChevronUp, File, X, Check, Activity
 } from 'lucide-react';
 import { AppData, Message, Thread, WorkflowInputDef } from '../types';
 
@@ -97,6 +98,35 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
     return 0;
   });
 
+  // --- Handlers ---
+
+  const handleSaveConfig = () => {
+     if (!isConfigValid) return; // Prevent saving if invalid
+
+     // Generate a summary string of the current config
+     const configSummary = app.workflowInputs?.map(input => {
+         const val = variableValues[input.id];
+         // Only show if it has a value
+         if (val === undefined || val === '') return null;
+         return { label: input.label, value: val };
+     }).filter(Boolean) as { label: string, value: any }[];
+
+     if (configSummary && configSummary.length > 0) {
+        // Construct System Message Content
+        const contentStr = configSummary.map(item => `**${item.label}**: ${item.value}`).join('  |  ');
+        
+        const systemMsg: Message = {
+            id: Date.now().toString(),
+            role: 'system',
+            content: `配置已更新: ${contentStr}`,
+            timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, systemMsg]);
+     }
+
+     setIsConfigPanelOpen(false);
+  };
+
   const handleSend = () => {
     if ((!input.trim() && !attachedFile) || isExhausted) return;
     
@@ -109,11 +139,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
     // Construct context from variables
     let contextIntro = "";
     if (hasWorkflowInputs && Object.keys(variableValues).length > 0) {
-       contextIntro = "**[已应用上下文配置]**\n" + 
-          Object.entries(variableValues).map(([k, v]) => {
-             const def = app.workflowInputs?.find(i => i.id === k);
-             return `- ${def?.label}: ${v}`;
-          }).join("\n") + "\n\n";
+       // We don't necessarily need to inject it into the prompt text visibly if the backend handles it,
+       // but for this demo, we assume the system context is managed via state.
+       // The 'system' message logs visualizes this change for the user.
     }
 
     const userMsg: Message = {
@@ -129,11 +157,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
     setAttachedFile(null); // Clear attachment
     setIsTyping(true);
     
-    // Auto collapse config panel on send if it was open
-    if (isConfigPanelOpen && messages.length <= 1 && hasWorkflowInputs) {
-        setIsConfigPanelOpen(false);
-    }
-    
     if (!isUnlimited) {
       setUsage(prev => prev + 1);
     }
@@ -142,7 +165,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'ai',
-        content: contextIntro ? `${contextIntro}收到。基于上述配置，为您生成以下内容：\n\n这是一个模拟的生成结果...` : "已收到您的请求。为了提供最佳结果，请指定期望的格式（例如表格、要点）以及任何约束条件。",
+        content: contextIntro ? `[系统监测到配置参数已生效]\n\n收到。为您生成内容：\n\n这是一个基于当前配置的模拟生成结果...` : "已收到您的请求。为了提供最佳结果，请指定期望的格式（例如表格、要点）以及任何约束条件。",
         timestamp: Date.now()
       };
       setMessages(prev => [...prev, aiMsg]);
@@ -161,7 +184,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
       if (e.target.files && e.target.files[0]) {
           setAttachedFile(e.target.files[0]);
       }
-      // Reset input so same file can be selected again if needed
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
       }
@@ -226,8 +248,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
            );
-        // Note: 'file' type inputs in workflowInputs are separate from the chat attachment feature.
-        // If a workflow requires a file input specifically (e.g. for processing), it stays here.
         case 'file':
            return (
               <div className="relative group">
@@ -244,7 +264,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
                  </div>
               </div>
            );
-        default: // text or paragraph
+        default: 
            return (
               <input 
                  type="text"
@@ -257,13 +277,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
      }
   };
 
-  // Determine if file upload is enabled via capabilities
-  const canUploadFile = app.capabilities?.fileUpload || app.provider === 'native'; // Native always supports it in this demo context, or rely on capability
+  const canUploadFile = app.capabilities?.fileUpload || app.provider === 'native';
 
   return (
     <div className="flex h-[calc(100vh-64px)] bg-slate-50 p-6 gap-6 overflow-hidden">
       
-      {/* Sidebar - History */}
+      {/* Sidebar - History (Same as before) */}
       <aside className="w-80 bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl flex flex-col shadow-float hidden md:flex ring-1 ring-slate-900/5">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <span className="font-extrabold text-slate-800 text-sm uppercase tracking-wider flex items-center gap-2">
@@ -373,8 +392,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
                onClick={() => setIsConfigPanelOpen(!isConfigPanelOpen)}
                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isConfigPanelOpen ? 'bg-slate-100 text-slate-900 border-slate-200' : 'bg-white text-slate-500 border-slate-100 hover:border-primary/30 hover:text-primary'} ${!isConfigValid && 'ring-2 ring-amber-100 border-amber-200 bg-amber-50 text-amber-700'}`}
              >
-                <SlidersHorizontal size={14} />
-                {isConfigPanelOpen ? '收起配置' : '展开配置'}
+                {isConfigPanelOpen ? <ChevronUp size={14} /> : <SlidersHorizontal size={14} />}
+                {isConfigPanelOpen ? '收起面板' : '编辑配置'}
                 {!isConfigValid && <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>}
              </button>
            )}
@@ -402,9 +421,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
                        ))}
                     </div>
                     
-                    <div className="mt-3 text-center">
-                       <button onClick={() => setIsConfigPanelOpen(false)} className="text-[10px] font-bold text-slate-400 hover:text-primary flex items-center justify-center gap-1 mx-auto transition-colors">
-                          <ChevronUp size={12} /> 收起面板 (配置已保存)
+                    <div className="mt-5 text-center">
+                       <button 
+                         onClick={handleSaveConfig} 
+                         className={`px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 mx-auto ${
+                            !isConfigValid 
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                            : 'bg-slate-900 text-white hover:bg-slate-800 hover:shadow-xl transform active:scale-95'
+                         }`}
+                         disabled={!isConfigValid}
+                       >
+                          <Check size={16} /> 保存配置
                        </button>
                     </div>
                  </div>
@@ -415,46 +442,66 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ app, onBack }) => 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/30 relative">
           <div className="absolute inset-0 bg-mesh opacity-30 pointer-events-none -z-10" />
-          <div className="relative z-0 max-w-4xl mx-auto space-y-8">
-            {messages.map(msg => (
-              <div key={msg.id} className={`flex gap-5 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                <div className={`
-                  w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm text-sm font-bold
-                  ${msg.role === 'ai' ? 'bg-white border border-slate-200 text-primary' : 'bg-slate-900 text-white'}
-                `}>
-                  {msg.role === 'ai' ? <Sparkles size={18} /> : 'ME'}
-                </div>
-                <div className="flex flex-col gap-2 max-w-[80%]">
-                   {/* Attachments Bubble */}
-                   {msg.attachments && msg.attachments.length > 0 && (
-                      <div className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                         {msg.attachments.map((file, idx) => (
-                            <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-slate-200 shadow-sm">
-                               <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                                  <File size={16} />
-                               </div>
-                               <div>
-                                  <div className="text-xs font-bold text-slate-700 truncate max-w-[150px]">{file.name}</div>
-                                  <div className="text-[10px] text-slate-400 uppercase">{file.type.split('/')[1] || 'FILE'}</div>
-                               </div>
-                            </div>
-                         ))}
+          <div className="relative z-0 max-w-4xl mx-auto space-y-8 pb-4">
+            {messages.map(msg => {
+              // Special System Message Style
+              if (msg.role === 'system') {
+                 return (
+                   <div key={msg.id} className="flex justify-center my-4 animate-in fade-in zoom-in-95 duration-300">
+                      <div className="bg-slate-100/50 backdrop-blur-sm border border-slate-200 rounded-full px-5 py-2 flex items-center gap-3 shadow-sm max-w-[80%]">
+                         <div className="w-5 h-5 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center flex-shrink-0">
+                            <Activity size={10} />
+                         </div>
+                         <div className="text-xs text-slate-500 font-medium truncate" title={msg.content.replace('配置已更新: ', '')}>
+                            {msg.content.split(' | ').map((part, i) => (
+                               <span key={i} dangerouslySetInnerHTML={{ __html: part.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') + (i < msg.content.split(' | ').length -1 ? ' <span class="mx-2 text-slate-300">|</span> ' : '') }} />
+                            ))}
+                         </div>
                       </div>
-                   )}
-
-                   <div className={`
-                     rounded-2xl p-6 text-[15px] leading-relaxed shadow-sm
-                     ${msg.role === 'ai' 
-                       ? 'bg-white border border-slate-200/60 text-slate-700' 
-                       : 'bg-primary-soft border border-primary/10 text-slate-900 font-medium'}
-                   `}>
-                     {msg.content.split('\n').map((line, i) => (
-                       <p key={i} className={i > 0 ? 'mt-3' : ''} dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') }} />
-                     ))}
                    </div>
+                 );
+              }
+
+              return (
+                <div key={msg.id} className={`flex gap-5 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                  <div className={`
+                    w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm text-sm font-bold
+                    ${msg.role === 'ai' ? 'bg-white border border-slate-200 text-primary' : 'bg-slate-900 text-white'}
+                  `}>
+                    {msg.role === 'ai' ? <Sparkles size={18} /> : 'ME'}
+                  </div>
+                  <div className="flex flex-col gap-2 max-w-[80%]">
+                     {/* Attachments Bubble */}
+                     {msg.attachments && msg.attachments.length > 0 && (
+                        <div className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                           {msg.attachments.map((file, idx) => (
+                              <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-slate-200 shadow-sm">
+                                 <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                    <File size={16} />
+                                 </div>
+                                 <div>
+                                    <div className="text-xs font-bold text-slate-700 truncate max-w-[150px]">{file.name}</div>
+                                    <div className="text-[10px] text-slate-400 uppercase">{file.type.split('/')[1] || 'FILE'}</div>
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+                     )}
+
+                     <div className={`
+                       rounded-2xl p-6 text-[15px] leading-relaxed shadow-sm
+                       ${msg.role === 'ai' 
+                         ? 'bg-white border border-slate-200/60 text-slate-700' 
+                         : 'bg-primary-soft border border-primary/10 text-slate-900 font-medium'}
+                     `}>
+                       {msg.content.split('\n').map((line, i) => (
+                         <p key={i} className={i > 0 ? 'mt-3' : ''} dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') }} />
+                       ))}
+                     </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {isTyping && (
               <div className="flex gap-5 animate-in fade-in">

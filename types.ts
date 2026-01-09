@@ -1,4 +1,5 @@
 
+
 export interface WorkflowInputDef {
   id: string;
   type: 'text' | 'paragraph' | 'file' | 'select';
@@ -67,11 +68,11 @@ export interface AppData {
   };
 }
 
-export type ViewState = 'marketplace' | 'chat' | 'workflow' | 'admin' | 'create-app' | 'workbench';
+export type ViewState = 'marketplace' | 'chat' | 'workflow' | 'admin' | 'create-app' | 'workbench' | 'image-gen';
 
 export interface Message {
   id: string;
-  role: 'user' | 'ai';
+  role: 'user' | 'ai' | 'system'; // Added 'system'
   content: string;
   timestamp: number;
   attachments?: { name: string; type: string }[];
@@ -92,4 +93,12 @@ export interface WorkflowRunResult {
   inputs: Record<string, any>;
   outputText?: string;
   outputFiles?: { name: string; url: string; size: string }[];
+}
+
+export interface GeneratedImage {
+  id: string;
+  url: string;
+  prompt: string;
+  aspectRatio: string;
+  timestamp: number;
 }

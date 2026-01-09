@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   LayoutGrid, ShieldCheck, 
-  Settings, LogOut, Flashlight, Wrench
+  Settings, LogOut, Flashlight, Wrench, Image as ImageIcon
 } from 'lucide-react';
 
 import { AppData, ViewState } from './types';
@@ -11,6 +11,7 @@ import { WorkflowInterface } from './views/WorkflowInterface';
 import { AdminDashboard } from './views/AdminDashboard';
 import { CreateApp } from './views/CreateApp';
 import { Workbench } from './views/Workbench';
+import { ImageGenView } from './views/ImageGenView';
 import { FeedbackModal } from './components/FeedbackModal';
 
 // Mock Data - Initial apps are published
@@ -76,7 +77,7 @@ const INITIAL_APPS: AppData[] = [
       { id: 'topic', type: 'text', label: '营销主题', required: true, placeholder: '例如：夏季新品发布会' },
       { id: 'platform', type: 'select', label: '发布平台', required: true, options: ['微信公众号', '小红书', 'LinkedIn', 'Twitter'] },
       { id: 'tone', type: 'select', label: '文案语气', required: false, options: ['专业严谨', '幽默风趣', '激情澎湃', '温馨感人'] },
-      { id: 'ref_doc', type: 'file', label: '参考资料 (选填)', required: false, accept: '.pdf,.docx' }
+      { id: 'ref_doc', type: 'file', label: '参考资料', required: false, accept: '.pdf,.docx' }
     ],
     creator: '市场运营部',
     lastUpdater: '王五',
@@ -271,6 +272,17 @@ export default function App() {
           </button>
           
           <button 
+            onClick={() => setView('image-gen')}
+            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all duration-300 ${
+              view === 'image-gen'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+            }`}
+          >
+            <ImageIcon size={16} className={view === 'image-gen' ? 'text-primary' : ''} /> 图像创作
+          </button>
+
+          <button 
             onClick={() => setView('workbench')}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all duration-300 ${
               view === 'workbench' || (view === 'create-app' && editingApp)
@@ -333,6 +345,7 @@ export default function App() {
               onEditApp={handleEditApp}
             />
         )}
+        {view === 'image-gen' && <ImageGenView />}
         {view === 'chat' && selectedApp && (
           <ChatInterface app={selectedApp} onBack={() => setView(selectedApp.status === 'draft' ? 'workbench' : 'marketplace')} />
         )}
