@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   Plus, Search, MoreHorizontal, Globe, Lock, 
@@ -120,7 +121,7 @@ export const Workbench: React.FC<WorkbenchProps> = ({
                       <div>
                          <h3 className="font-bold text-slate-900 truncate max-w-[140px]">{app.name}</h3>
                          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 mt-0.5">
-                            <span className="uppercase">{app.mode === 'workflow' ? 'Workflow' : 'Agent'}</span>
+                            <span className="uppercase">{app.mode === 'workflow' ? '自动化' : '对话'}</span>
                             <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                             <span>{app.lastUpdater}</span>
                          </div>

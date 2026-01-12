@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, Globe, Zap, 
@@ -122,7 +123,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
         provider: 'native',
         mode: 'chat',
         // icon: Use basicInfo.icon
-        tag: '原生',
+        tag: '对话', // Native is always chat type
         // Preserve existing stats if editing
         usersCount: initialData?.usersCount || '0',
         likes: initialData?.likes || 0,
@@ -801,6 +802,9 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
   const isNative = creationType === 'native';
   const previewIcon = AVAILABLE_ICONS.find(i => i.id === basicInfo.icon)?.icon || <Zap size={24} />;
 
+  // Logic to determine badge style in preview
+  const isWorkflow = !isNative && externalConfig.mode === 'workflow';
+
   return (
     <div className="flex h-[calc(100vh-64px)] bg-slate-50 overflow-hidden">
       
@@ -856,9 +860,16 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                    {previewIcon}
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                    <span className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold border uppercase tracking-wider bg-slate-50 text-slate-400 border-slate-100">
-                      {isNative ? '原生' : (externalConfig.mode === 'chat' ? '对话' : '自动化')}
-                    </span>
+                    {/* Badge: App Type (Chat vs Workflow) */}
+                    {isWorkflow ? (
+                        <span className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold border border-purple-100 bg-purple-50 text-purple-600 uppercase tracking-wider flex items-center gap-1.5">
+                           <Workflow size={12} /> 自动化
+                        </span>
+                    ) : (
+                        <span className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold border border-emerald-100 bg-emerald-50 text-emerald-600 uppercase tracking-wider flex items-center gap-1.5">
+                           <MessageSquare size={12} /> 对话
+                        </span>
+                    )}
                     <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-50/50 px-2 py-1 rounded-md">
                        <Activity size={12} /> {initialData?.usersCount || 0}
                     </div>

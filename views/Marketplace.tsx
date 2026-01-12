@@ -1,9 +1,10 @@
+
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { 
   Search, ChevronDown, Rocket, 
   ThumbsUp, ThumbsDown, Star, MessageSquare, 
   Play, Activity, Zap, FileText, PenTool, Code2,
-  User, Layers, ArrowUpDown, Check, RefreshCw, Sparkles, Filter
+  User, Layers, ArrowUpDown, Check, RefreshCw, Sparkles, Filter, Workflow
 } from 'lucide-react';
 import { AppData } from '../types';
 
@@ -80,6 +81,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       case 'code': return <Code2 size={24} />;
       default: return <Zap size={24} />;
     }
+  };
+
+  const getModeBadge = (mode: string | undefined) => {
+    if (mode === 'workflow') {
+      return (
+        <span className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold border border-purple-100 bg-purple-50 text-purple-600 uppercase tracking-wider flex items-center gap-1.5">
+          <Workflow size={12} /> 自动化
+        </span>
+      );
+    }
+    // Default to Chat/Agent
+    return (
+      <span className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold border border-emerald-100 bg-emerald-50 text-emerald-600 uppercase tracking-wider flex items-center gap-1.5">
+        <MessageSquare size={12} /> 对话
+      </span>
+    );
   };
 
   const toggleDropdown = (name: 'category' | 'sort') => {
@@ -224,9 +241,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       {getIcon(app.icon)}
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                       <span className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold border uppercase tracking-wider ${app.isFav ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
-                         {app.tag}
-                       </span>
+                       {/* Mode Badge - Replaces Tag */}
+                       {getModeBadge(app.mode)}
                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-50/50 px-2 py-1 rounded-md">
                           <Activity size={12} /> {app.usersCount}
                        </div>
