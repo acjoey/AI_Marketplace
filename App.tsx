@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   LayoutGrid, ShieldCheck, 
@@ -254,8 +255,7 @@ export default function App() {
             <Flashlight size={22} strokeWidth={2.5} />
           </div>
           <div>
-            <span className="font-extrabold text-xl tracking-tight text-slate-900 block leading-none">AI Nexus</span>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Enterprise</span>
+            <span className="font-extrabold text-xl tracking-tight text-slate-900 block leading-none">AI应用广场</span>
           </div>
         </div>
         

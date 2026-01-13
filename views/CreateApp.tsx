@@ -57,7 +57,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
     provider: (initialData?.provider === 'native' ? 'dify' : initialData?.provider || 'dify') as ProviderType,
     mode: (initialData?.mode || 'chat') as InteractionMode,
     apiEndpoint: initialData?.apiEndpoint || 'http://agent.esrcloud.com/v1',
-    apiKey: initialData ? 'sk-********************' : '', // Masked key if editing
+    apiKey: '', // No masking/desensitization
     workflowInputs: initialData?.workflowInputs || [] as WorkflowInputDef[],
   });
 
@@ -534,11 +534,11 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                       <Key size={12} /> API Key
                    </label>
                    <input 
-                     type="password"
+                     type="text"
                      value={externalConfig.apiKey}
                      onChange={e => setExternalConfig(prev => ({...prev, apiKey: e.target.value}))}
-                     className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 font-mono text-sm text-slate-600 focus:text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm tracking-widest"
-                     placeholder={initialData ? "不修改则留空" : "sk-........................"}
+                     className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 font-mono text-sm text-slate-600 focus:text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                     placeholder="sk-........................"
                    />
                 </div>
 
