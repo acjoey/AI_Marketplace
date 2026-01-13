@@ -478,10 +478,6 @@ export const ImageGenView: React.FC = () => {
                   </>
                )}
             </button>
-            <p className="text-center text-[10px] text-slate-400 font-bold mt-3 flex items-center justify-center gap-1.5">
-               <Zap size={10} className="text-amber-400 fill-amber-400" />
-               {activeTool.id === 'text-to-image' ? '1 积分 / 次' : '3 积分 / 次 (ComfyUI)'}
-            </p>
          </div>
       </aside>
 
