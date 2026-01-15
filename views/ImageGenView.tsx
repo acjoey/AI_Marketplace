@@ -96,7 +96,7 @@ const TOOLS: ToolDef[] = [
 const MOCK_PUBLIC_GALLERY: PublicImage[] = [
     {
         id: 'pub_1',
-        url: 'https://picsum.photos/id/237/800/800',
+        url: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=800&q=80',
         prompt: 'A black labrador puppy wearing astronaut gear, floating in space station, 8k realism',
         aspectRatio: '1:1',
         timestamp: Date.now() - 1000000,
@@ -109,7 +109,7 @@ const MOCK_PUBLIC_GALLERY: PublicImage[] = [
     },
     {
         id: 'pub_2',
-        url: 'https://picsum.photos/id/64/800/800',
+        url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80',
         prompt: 'Virtual Try-on: Summer floral dress on model',
         aspectRatio: '3:4',
         timestamp: Date.now() - 5000000,
@@ -154,7 +154,6 @@ export const ImageGenView: React.FC = () => {
   // Feedback States
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const simulateMode = !process.env.API_KEY;
   const currentUser = 'Admin User'; 
   
   const activeTool = TOOLS.find(t => t.id === activeToolId) || TOOLS[0];
@@ -210,70 +209,45 @@ export const ImageGenView: React.FC = () => {
     setGeneratedImage(null);
     if (isGalleryMode) setIsGalleryMode(false); 
 
-    try {
-      let imageUrl = '';
-
-      // --- SIMULATION LOGIC ---
-      // In a real app, this switch would call different API endpoints (Gemini vs ComfyUI Backend)
-      if (activeToolId === 'text-to-image' && !simulateMode) {
-        // REAL API CALL: Nano Banana
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-        const parts: any[] = [];
+    // --- SIMULATION LOGIC ---
+    // 为了方便演示，此处直接模拟生成过程，并返回高质量的示例图片
+    // In a real production scenario, this would call the Google GenAI API or a backend service
+    
+    setTimeout(() => {
+        let imageUrl = '';
         
-        // Check for ref image (id: 'ref_image')
-        const refImg = inputImages['ref_image'];
-        if (refImg) {
-            parts.push({
-                inlineData: { mimeType: refImg.mimeType, data: refImg.data }
-            });
+        // Select high-quality mock image based on tool type to simulate result
+        if (activeToolId === 'text-to-image') {
+            const abstractImages = [
+                'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80', // Liquid Abstract
+                'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=1200&q=80', // Cyberpunk
+                'https://images.unsplash.com/photo-1695420108343-6d0c67597c27?auto=format&fit=crop&w=1200&q=80', // AI Art
+                'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=1200&q=80'  // Gradient
+            ];
+            imageUrl = abstractImages[Math.floor(Math.random() * abstractImages.length)];
+        } else if (activeToolId === 'face-swap') {
+            imageUrl = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80'; // Portrait
+        } else if (activeToolId === 'virtual-try-on') {
+            imageUrl = 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1200&q=80'; // Fashion
+        } else if (activeToolId === 'remove-bg') {
+            imageUrl = 'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?auto=format&fit=crop&w=1200&q=80'; // Mock product
         }
-        parts.push({ text: prompt });
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash-image',
-          contents: { parts },
-        });
-
-        if (response.candidates && response.candidates[0].content.parts) {
-            for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData) {
-                    imageUrl = `data:image/png;base64,${part.inlineData.data}`;
-                    break;
-                }
-            }
-        }
-      } else {
-        // ComfyUI Simulation / API Key Missing
-        await new Promise(resolve => setTimeout(resolve, activeToolId === 'text-to-image' ? 3000 : 5000));
-        
-        // Mock Outputs based on tool
-        if (activeToolId === 'face-swap') imageUrl = 'https://picsum.photos/id/64/800/800'; // Mock portrait
-        else if (activeToolId === 'virtual-try-on') imageUrl = 'https://picsum.photos/id/177/800/800'; // Mock fashion
-        else imageUrl = `https://picsum.photos/seed/${Date.now()}/800/800`;
-      }
-
-      if (imageUrl) {
         const newImage: GeneratedImage & { toolId?: string } = {
-          id: Date.now().toString(),
-          url: imageUrl,
-          prompt: activeToolId === 'text-to-image' ? prompt : `${activeTool.name} Task`,
-          aspectRatio: '1:1',
-          timestamp: Date.now(),
-          toolId: activeToolId
+            id: Date.now().toString(),
+            url: imageUrl,
+            prompt: activeToolId === 'text-to-image' ? prompt : `${activeTool.name} Task`,
+            aspectRatio: '1:1',
+            timestamp: Date.now(),
+            toolId: activeToolId
         };
+        
         setGeneratedImage(newImage);
         setHistory(prev => [newImage, ...prev]);
-      }
-
-    } catch (error) {
-      console.error("Generation failed:", error);
-      alert("生成失败，请检查网络或 API Key 配置。");
-    } finally {
-      setIsGenerating(false);
-    }
+        setIsGenerating(false);
+    }, 2000); // 2 seconds simulation delay
   };
 
-  // ... (handleDownload, handleDelete, onPublishClick, confirmPublish, handleLike, handleAddComment - Keep logic same)
   const handleDownload = (e: React.MouseEvent, url: string, id: string) => {
     e.stopPropagation();
     const link = document.createElement('a');
@@ -343,23 +317,22 @@ export const ImageGenView: React.FC = () => {
       />
 
       {/* Left Sidebar: Controls */}
-      <aside className="w-[380px] flex-shrink-0 bg-white/80 backdrop-blur-xl border-r border-slate-200 flex flex-col z-20 shadow-sm h-full">
+      <aside className="w-[380px] flex-shrink-0 bg-white/70 backdrop-blur-2xl border-r border-slate-200/60 flex flex-col z-20 shadow-xl shadow-slate-200/20 h-full transition-all">
          
          {/* Tool Switcher Header */}
-         <div className="p-5 border-b border-slate-100 flex-shrink-0 relative">
+         <div className="p-6 border-b border-slate-100 flex-shrink-0 relative">
             <div 
                 onClick={() => setIsToolMenuOpen(!isToolMenuOpen)}
-                className={`flex items-center gap-4 p-2 -m-2 rounded-xl cursor-pointer transition-colors hover:bg-slate-50 ${isToolMenuOpen ? 'bg-slate-50' : ''}`}
+                className={`flex items-center gap-4 p-3 -m-2 rounded-2xl cursor-pointer transition-all hover:bg-slate-50 border border-transparent ${isToolMenuOpen ? 'bg-white shadow-lg shadow-slate-100 border-slate-100' : ''}`}
             >
-                {/* REMOVED BIG ICON CONTAINER HERE */}
                 <div className="flex-1">
                    <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
                        {activeTool.name}
                        <ChevronDown size={18} className={`text-slate-400 transition-transform ${isToolMenuOpen ? 'rotate-180' : ''}`} />
                    </h2>
-                   <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 mt-1">
-                      <span className={`px-1.5 py-0.5 rounded border ${activeTool.id === 'text-to-image' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-blue-600 bg-blue-50 border-blue-100'}`}>
-                         {activeTool.id === 'text-to-image' ? 'Nano Banana' : 'ComfyUI'}
+                   <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 mt-1.5">
+                      <span className={`px-2 py-0.5 rounded-md border flex items-center gap-1 ${activeTool.id === 'text-to-image' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-blue-700 bg-blue-50 border-blue-100'}`}>
+                         <Zap size={10} fill="currentColor" /> {activeTool.id === 'text-to-image' ? 'Nano Banana' : 'ComfyUI'}
                       </span>
                    </div>
                 </div>
@@ -367,20 +340,22 @@ export const ImageGenView: React.FC = () => {
 
             {/* Tool Dropdown Menu */}
             {isToolMenuOpen && (
-                <div className="absolute left-4 right-4 top-20 z-50 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/50 p-2 animate-in fade-in slide-in-from-top-2 ring-1 ring-black/5">
+                <div className="absolute left-4 right-4 top-24 z-50 bg-white border border-slate-200 rounded-2xl shadow-2xl shadow-slate-300/50 p-2 animate-in fade-in slide-in-from-top-2 ring-1 ring-black/5 transform origin-top">
                     <div className="space-y-1">
                         {TOOLS.map(tool => (
                             <div 
                                key={tool.id}
                                onClick={() => { setActiveToolId(tool.id); setIsToolMenuOpen(false); }}
-                               className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${activeToolId === tool.id ? 'bg-slate-100 border border-slate-200 shadow-sm' : 'hover:bg-slate-50 border border-transparent'}`}
+                               className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${activeToolId === tool.id ? 'bg-slate-50 border border-slate-200 shadow-sm' : 'hover:bg-slate-50 border border-transparent'}`}
                             >
-                                {/* REMOVED SMALL ICON CONTAINER HERE */}
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tool.color}`}>
+                                    {tool.icon}
+                                </div>
                                 <div className="flex-1">
                                     <div className="text-sm font-bold text-slate-800">{tool.name}</div>
                                     <div className="text-[10px] text-slate-400 leading-tight mt-0.5">{tool.description}</div>
                                 </div>
-                                {activeToolId === tool.id && <Check size={16} className="ml-auto text-slate-900" />}
+                                {activeToolId === tool.id && <Check size={16} className="ml-auto text-primary" />}
                             </div>
                         ))}
                     </div>
@@ -389,46 +364,52 @@ export const ImageGenView: React.FC = () => {
          </div>
 
          {/* Dynamic Input Form */}
-         <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-thin scrollbar-thumb-slate-200">
+         <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-thin scrollbar-thumb-slate-200">
             {activeTool.inputs.map(input => (
                 <div key={input.id} className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
-                    <label className="flex items-center justify-between text-xs font-extrabold text-slate-500 uppercase tracking-wider">
-                       <span>{input.label} {input.required && <span className="text-red-500">*</span>}</span>
+                    <label className="flex items-center justify-between text-xs font-extrabold text-slate-500 uppercase tracking-wider pl-1">
+                       <span>{input.label} {input.required && <span className="text-rose-500">*</span>}</span>
                        {input.type === 'text' && (
                            <div className="flex gap-2">
                                 <button 
-                                    onClick={() => setPrompt("A futuristic city with neon lights, cyberpunk style, 8k resolution")}
-                                    className="text-[10px] font-bold text-primary hover:text-primary-dark transition-colors flex items-center gap-1"
+                                    onClick={() => setPrompt("A futuristic city with neon lights, cyberpunk style, 8k resolution, cinematic lighting")}
+                                    className="text-[10px] font-bold text-primary hover:text-primary-dark transition-colors flex items-center gap-1 bg-primary/5 px-2 py-0.5 rounded-md border border-primary/10 hover:border-primary/20"
                                 >
-                                    <Zap size={10} /> 示例
+                                    <Zap size={10} fill="currentColor" /> 试试示例
                                 </button>
-                                <button onClick={() => setPrompt('')} className="text-slate-400 hover:text-slate-600"><Eraser size={12} /></button>
+                                <button onClick={() => setPrompt('')} className="text-slate-400 hover:text-slate-600 p-0.5 hover:bg-slate-100 rounded transition-colors"><Eraser size={12} /></button>
                            </div>
                        )}
                     </label>
 
                     {input.type === 'text' ? (
-                        <textarea 
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                            className="w-full h-40 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-medium text-slate-800 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none resize-none transition-all placeholder:text-slate-400 leading-relaxed shadow-inner"
-                            placeholder={input.placeholder}
-                        />
+                        <div className="relative group">
+                            <textarea 
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                className="w-full h-48 bg-white border border-slate-200 rounded-2xl p-4 text-sm font-medium text-slate-800 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none resize-none transition-all placeholder:text-slate-300 leading-relaxed shadow-sm group-hover:border-slate-300"
+                                placeholder={input.placeholder}
+                            />
+                            <div className="absolute bottom-3 right-3 text-[10px] text-slate-300 font-bold bg-white px-2 py-1 rounded-md border border-slate-100">
+                                {prompt.length} chars
+                            </div>
+                        </div>
                     ) : (
                         // Image Uploaders
                         <div className="space-y-2">
                             {!inputImages[input.id] ? (
                                 <div 
                                     onClick={() => triggerFileSelect(input.id)}
-                                    className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all group relative overflow-hidden ${input.required ? 'border-slate-300 bg-slate-50' : 'border-slate-200 bg-slate-50/50'}`}
+                                    className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all group relative overflow-hidden ${input.required ? 'border-slate-300 bg-slate-50/50 hover:bg-white' : 'border-slate-200 bg-slate-50/30 hover:bg-white'}`}
                                 >
                                     <div className="relative z-10">
-                                        <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center mx-auto mb-2 shadow-sm group-hover:scale-110 transition-transform">
-                                            <UploadCloud size={18} className="text-slate-400 group-hover:text-primary" />
+                                        <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center mx-auto mb-3 shadow-sm group-hover:scale-110 transition-transform group-hover:border-primary/20 group-hover:text-primary group-hover:shadow-primary/10">
+                                            <UploadCloud size={20} className="text-slate-400 group-hover:text-primary transition-colors" />
                                         </div>
-                                        <p className="text-xs font-bold text-slate-600 group-hover:text-primary-dark">
+                                        <p className="text-xs font-bold text-slate-600 group-hover:text-primary-dark transition-colors">
                                             {input.placeholder || '点击上传图片'}
                                         </p>
+                                        <p className="text-[10px] text-slate-400 mt-1">支持 JPG, PNG (Max 5MB)</p>
                                     </div>
                                     <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </div>
@@ -442,13 +423,13 @@ export const ImageGenView: React.FC = () => {
                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                                         <button 
                                             onClick={() => removeInputImage(input.id)}
-                                            className="px-3 py-1.5 bg-white rounded-lg text-[10px] font-bold text-red-500 shadow-lg hover:bg-red-50 transition-colors flex items-center gap-1.5"
+                                            className="px-4 py-2 bg-white rounded-xl text-xs font-bold text-red-500 shadow-lg hover:bg-red-50 transition-colors flex items-center gap-1.5 transform hover:scale-105"
                                         >
-                                            <Trash2 size={12} /> 移除
+                                            <Trash2 size={14} /> 移除图片
                                         </button>
                                     </div>
                                     {/* Tag indicating Source or Target */}
-                                    <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 backdrop-blur-md rounded text-[10px] font-bold text-white uppercase">
+                                    <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 backdrop-blur-md rounded-lg text-[10px] font-bold text-white uppercase border border-white/10">
                                         {input.type === 'image-source' ? 'Source' : input.type === 'image-target' ? 'Target' : 'Image'}
                                     </div>
                                 </div>
@@ -460,23 +441,30 @@ export const ImageGenView: React.FC = () => {
          </div>
 
          {/* Generate Action */}
-         <div className="p-5 border-t border-slate-100 bg-white shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)] z-20 flex-shrink-0">
+         <div className="p-6 border-t border-slate-100 bg-white/80 backdrop-blur-md z-20 flex-shrink-0">
             <button 
                onClick={handleGenerate}
                disabled={isGenerating}
-               className={`w-full py-3.5 rounded-xl font-bold text-sm shadow-xl flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] ${isGenerating ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-slate-800 hover:shadow-2xl hover:shadow-slate-200/50'}`}
+               className={`w-full py-4 rounded-2xl font-bold text-sm shadow-xl flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] border border-white/20 relative overflow-hidden group ${isGenerating ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:shadow-2xl hover:shadow-primary/30'}`}
             >
-               {isGenerating ? (
-                  <>
-                     <RefreshCw size={16} className="animate-spin" /> 
-                     {activeTool.id === 'text-to-image' ? '正在创作...' : 'ComfyUI 处理中...'}
-                  </>
-               ) : (
-                  <>
-                     <Sparkles size={16} fill="currentColor" className="text-primary" /> 
-                     {activeTool.id === 'text-to-image' ? '立即生成' : `开始${activeTool.name}`}
-                  </>
+               {/* Gradient Background */}
+               {!isGenerating && (
+                   <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                )}
+               
+               <div className="relative z-10 flex items-center gap-2">
+                   {isGenerating ? (
+                      <>
+                         <RefreshCw size={18} className="animate-spin" /> 
+                         {activeTool.id === 'text-to-image' ? '正在绘制中...' : 'ComfyUI 处理中...'}
+                      </>
+                   ) : (
+                      <>
+                         <Sparkles size={18} fill="currentColor" className="text-primary-300 group-hover:text-white" /> 
+                         {activeTool.id === 'text-to-image' ? '立即生成' : `开始${activeTool.name}`}
+                      </>
+                   )}
+               </div>
             </button>
          </div>
       </aside>
@@ -489,52 +477,61 @@ export const ImageGenView: React.FC = () => {
              
              {!generatedImage && !isGenerating ? (
                <div className="text-center max-w-md animate-in fade-in zoom-in-95 duration-500 opacity-60">
-                  <div className="w-24 h-24 mx-auto rounded-[2rem] bg-white border border-slate-100 shadow-xl shadow-slate-200/50 flex items-center justify-center mb-6">
-                     <Layers size={40} className="text-slate-200" />
+                  <div className="w-28 h-28 mx-auto rounded-[2.5rem] bg-white border border-slate-100 shadow-xl shadow-slate-200/50 flex items-center justify-center mb-8 relative">
+                     <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-white rounded-[2.5rem]"></div>
+                     <Layers size={48} className="text-slate-300 relative z-10" />
+                     {/* Decorative Elements */}
+                     <div className="absolute -top-2 -right-2 w-8 h-8 bg-primary/10 rounded-full blur-xl"></div>
+                     <div className="absolute -bottom-2 -left-2 w-12 h-12 bg-purple-500/10 rounded-full blur-xl"></div>
                   </div>
-                  <h3 className="text-xl font-extrabold text-slate-800 mb-2">准备就绪</h3>
-                  <p className="text-slate-500 text-sm font-medium leading-relaxed">
-                     当前工具：<span className="font-bold text-slate-700">{activeTool.name}</span><br/>
-                     {activeToolId === 'text-to-image' ? '配置您的 Prompt，AI 将为您绘制。' : '上传所需素材，AI 将为您执行工作流。'}
+                  <h3 className="text-2xl font-extrabold text-slate-800 mb-3 tracking-tight">准备就绪</h3>
+                  <p className="text-slate-500 text-sm font-medium leading-relaxed max-w-xs mx-auto">
+                     当前工具：<span className="font-bold text-slate-800 bg-slate-200/50 px-2 py-0.5 rounded">{activeTool.name}</span><br/>
+                     <span className="text-slate-400 mt-2 block">
+                        {activeToolId === 'text-to-image' ? '配置左侧 Prompt，AI 将为您绘制。' : '上传所需素材，AI 将为您执行工作流。'}
+                     </span>
                   </p>
                </div>
              ) : (
                 <div className={`relative w-full h-full flex items-center justify-center transition-all duration-700 ${isGenerating ? 'scale-95 opacity-80' : 'scale-100 opacity-100'}`}>
                    {isGenerating ? (
-                      <div className="w-[400px] h-[400px] rounded-3xl bg-white border border-slate-100 shadow-xl overflow-hidden relative flex flex-col items-center justify-center">
+                      <div className="w-[420px] h-[420px] rounded-[2.5rem] bg-white border border-slate-100 shadow-2xl overflow-hidden relative flex flex-col items-center justify-center">
                          <div className="absolute inset-0 bg-gradient-to-tr from-indigo-50/50 via-white to-purple-50/50 animate-pulse"></div>
-                         <div className="w-12 h-12 border-4 border-slate-100 border-t-primary rounded-full animate-spin mb-4 relative z-10"></div>
-                         <p className="text-xs font-bold text-slate-500 relative z-10 animate-pulse uppercase tracking-wider">
-                             {activeToolId === 'text-to-image' ? 'Rendering...' : 'Processing Workflow...'}
-                         </p>
+                         <div className="relative z-10 flex flex-col items-center">
+                             <div className="w-16 h-16 border-4 border-slate-100 border-t-primary rounded-full animate-spin mb-6"></div>
+                             <p className="text-sm font-bold text-slate-800 animate-pulse uppercase tracking-wider mb-1">
+                                 {activeToolId === 'text-to-image' ? 'Rendering...' : 'Processing Workflow...'}
+                             </p>
+                             <p className="text-xs text-slate-400 font-medium">Estimated time: 2s</p>
+                         </div>
                       </div>
                    ) : generatedImage && (
                       <div className="relative group max-w-full max-h-full flex items-center justify-center">
-                         <div className="rounded-2xl overflow-hidden shadow-2xl shadow-slate-300/50 ring-8 ring-white bg-white relative">
+                         <div className="rounded-3xl overflow-hidden shadow-2xl shadow-slate-300/50 ring-8 ring-white bg-white relative">
                             <img 
                               src={generatedImage.url} 
                               alt={generatedImage.prompt}
                               className="max-h-[calc(100vh-200px)] max-w-full object-contain"
                             />
                             {/* Tool Badge on Canvas */}
-                            <div className="absolute top-4 left-4 px-2 py-1 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold rounded uppercase flex items-center gap-1.5">
+                            <div className="absolute top-4 left-4 px-3 py-1.5 bg-black/50 backdrop-blur-xl text-white text-[10px] font-bold rounded-xl uppercase flex items-center gap-2 border border-white/10 shadow-lg">
                                 {TOOLS.find(t => t.id === (generatedImage as any).toolId)?.icon}
                                 {TOOLS.find(t => t.id === (generatedImage as any).toolId)?.name || 'Image'}
                             </div>
                          </div>
                          
                          {/* Floating Action Bar */}
-                         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 px-1.5 py-1.5 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-white/10 opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0 shadow-2xl">
+                         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-2 px-2 py-2 bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-white/10 opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0 shadow-2xl scale-95 hover:scale-100">
                             <button 
                               onClick={(e) => handleDownload(e, generatedImage.url, generatedImage.id)}
-                              className="px-3 py-2 rounded-xl bg-white text-slate-900 text-xs font-bold hover:bg-primary hover:text-white transition-colors flex items-center gap-2"
+                              className="px-4 py-2.5 rounded-xl bg-white text-slate-900 text-xs font-bold hover:bg-primary hover:text-white transition-colors flex items-center gap-2 shadow-sm"
                             >
                                <Download size={14} /> 下载
                             </button>
-                            <div className="w-px h-4 bg-white/20"></div>
+                            <div className="w-px h-5 bg-white/20 mx-1"></div>
                             <button 
                               onClick={() => window.open(generatedImage.url, '_blank')}
-                              className="p-2 rounded-xl text-white hover:bg-white/20 transition-colors"
+                              className="p-2.5 rounded-xl text-white hover:bg-white/20 transition-colors"
                               title="全屏查看"
                             >
                                <Maximize2 size={16} />
@@ -547,7 +544,6 @@ export const ImageGenView: React.FC = () => {
          </div>
 
          {/* 2. History & Gallery Container */}
-         {/* ... (Keep existing structure, updated mapping to show Tool Icon) ... */}
          <div 
            className={`
               transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] 
@@ -555,7 +551,7 @@ export const ImageGenView: React.FC = () => {
               ${isGalleryMode ? 'absolute inset-0 bg-slate-50' : `flex-shrink-0 ${isHistoryExpanded ? 'h-36' : 'h-11'}`}
            `}
          >
-             {/* ... Header (Same as before) ... */}
+             {/* ... Header ... */}
              <div className="h-11 px-5 flex justify-between items-center bg-white/50 border-b border-transparent hover:border-slate-100 flex-shrink-0">
                 {isGalleryMode ? (
                     <div className="flex items-center gap-4 h-full">
@@ -567,12 +563,12 @@ export const ImageGenView: React.FC = () => {
                         </button>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}>
-                       <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}>
+                       <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 group-hover:text-slate-800 transition-colors">
                           <History size={12} /> 近期创作 
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 ml-1">{history.length}</span>
+                          <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 ml-1 group-hover:bg-slate-200 transition-colors">{history.length}</span>
                        </span>
-                       <span className="text-slate-400 hover:text-slate-600 transition-colors">{isHistoryExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}</span>
+                       <span className="text-slate-400 group-hover:text-slate-600 transition-colors">{isHistoryExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}</span>
                     </div>
                 )}
                 
@@ -672,8 +668,6 @@ export const ImageGenView: React.FC = () => {
              </div>
          </div>
 
-         {/* ... Modals (Safety, Detail) - Same Logic ... */}
-         {/* ... (Existing Modal Code Omitted for Brevity but presumed kept) ... */}
          {/* 1. Safety Check Publish Modal */}
          {publishImage && (
              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">

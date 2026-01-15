@@ -72,6 +72,131 @@ interface ModelDefinition {
   provider: string;
 }
 
+// --- Tree View Helpers ---
+
+interface TreeNode {
+  id: string;
+  label: string;
+  children?: TreeNode[];
+  isChecked?: boolean; // Is the item itself selected
+  isDimmed?: boolean; // Is it just a container (parent of selected)
+  type?: 'dept' | 'user';
+  icon?: React.ReactNode;
+}
+
+const buildDeptTree = (depts: Department[], selected: string[]): TreeNode[] => {
+  return depts.map(d => {
+    const isSelected = selected.includes(d.name);
+    const children = d.children ? buildDeptTree(d.children, selected) : [];
+    if (!isSelected && children.length === 0) return null;
+    return {
+      id: d.name,
+      label: d.name,
+      children,
+      isChecked: isSelected,
+      isDimmed: !isSelected,
+      type: 'dept'
+    };
+  }).filter(Boolean) as TreeNode[];
+};
+
+const buildUserTree = (depts: Department[], users: User[], selectedIds: string[]): TreeNode[] => {
+   const traverse = (currentDepts: Department[]): TreeNode[] => {
+     return currentDepts.map(d => {
+        // Users in this dept
+        const deptUsers = users.filter(u => u.department === d.name && selectedIds.includes(u.id));
+        const userNodes: TreeNode[] = deptUsers.map(u => ({
+           id: u.id,
+           label: u.name,
+           isChecked: true,
+           type: 'user'
+        }));
+
+        const childrenNodes = d.children ? traverse(d.children) : [];
+        
+        if (userNodes.length === 0 && childrenNodes.length === 0) return null;
+
+        return {
+           id: d.name,
+           label: d.name,
+           children: [...childrenNodes, ...userNodes],
+           isChecked: false,
+           isDimmed: true, // Departments are just containers here
+           type: 'dept'
+        };
+     }).filter(Boolean) as TreeNode[];
+   };
+   return traverse(depts);
+};
+
+const TreeItem: React.FC<{ 
+  node: TreeNode; 
+  onToggle: (id: string, type: 'dept' | 'user') => void; 
+}> = ({ node, onToggle }) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const hasChildren = node.children && node.children.length > 0;
+
+  return (
+    <div className="relative">
+       <div className={`flex items-center gap-2 py-1.5 hover:bg-slate-50/80 rounded-lg transition-colors group select-none ${node.isDimmed ? 'opacity-90' : ''}`}>
+          
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+             {/* Expander */}
+             <button 
+               onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+               className={`w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors ${!hasChildren ? 'invisible' : ''}`}
+             >
+                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+             </button>
+
+             {/* Checkbox */}
+             <div 
+                onClick={() => !node.isDimmed && onToggle(node.id, node.type!)}
+                className={`
+                   w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all shadow-sm
+                   ${node.isChecked 
+                      ? 'bg-primary border-primary' 
+                      : node.isDimmed 
+                         ? 'border-slate-200 bg-slate-50 cursor-default' // Container style
+                         : 'border-slate-300 bg-white hover:border-primary'}
+                `}
+             >
+                {node.isChecked && <Check size={10} className="text-white" strokeWidth={3} />}
+                {node.isDimmed && <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>}
+             </div>
+
+             {/* Label */}
+             <div className="flex items-center gap-2 min-w-0">
+                {node.type === 'user' ? (
+                   <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold">
+                      {node.label.charAt(0)}
+                   </div>
+                ) : (
+                   <FolderTree size={14} className="text-slate-400" />
+                )}
+                <span className={`text-sm ${node.isChecked ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>
+                   {node.label}
+                </span>
+             </div>
+          </div>
+       </div>
+
+       {/* Children */}
+       {hasChildren && isExpanded && (
+          <div className="relative ml-2.5 pl-3 border-l border-slate-200/60">
+             {node.children!.map((child, idx) => (
+                <TreeItem 
+                   key={child.id + idx} 
+                   node={child} 
+                   onToggle={onToggle} 
+                />
+             ))}
+          </div>
+       )}
+    </div>
+  );
+};
+
 // --- Constants ---
 
 const MOCK_MODELS: ModelDefinition[] = [
@@ -473,11 +598,18 @@ const PolicyEditModal: React.FC<{
   const [activeTab, setActiveTab] = useState<'basics' | 'assignments'>('basics');
   const [isDeptSelectorOpen, setIsDeptSelectorOpen] = useState(false);
   const [isUserSelectorOpen, setIsUserSelectorOpen] = useState(false);
+  
+  // Computed Trees
+  const deptTree = useMemo(() => buildDeptTree(departments, formData.appliedDepartments), [departments, formData.appliedDepartments]);
+  const userTree = useMemo(() => buildUserTree(departments, users, formData.appliedUserIds), [departments, users, formData.appliedUserIds]);
+
   useEffect(() => {
     if (policy) { setFormData({ ...policy }); } 
     else { setFormData({ id: Date.now().toString(), name: '', description: '', modelQuotas: MOCK_MODELS.map(m => ({ modelId: m.id, limit: 100 })), targetAll: false, appliedDepartments: [], appliedUserIds: [] }); }
   }, [policy, isOpen]);
+  
   if (!isOpen) return null;
+  
   const handleQuotaChange = (modelId: string, limitStr: string) => { const newQuotas = [...formData.modelQuotas]; const index = newQuotas.findIndex(q => q.modelId === modelId); const newLimit = limitStr === 'unlimited' ? 'unlimited' : parseInt(limitStr) || 0; if (index >= 0) { newQuotas[index] = { ...newQuotas[index], limit: newLimit }; } else { newQuotas.push({ modelId, limit: newLimit }); } setFormData({ ...formData, modelQuotas: newQuotas }); };
   const removeDepartment = (deptName: string) => { setFormData({ ...formData, appliedDepartments: formData.appliedDepartments.filter(d => d !== deptName) }); };
   const toggleUser = (userId: string) => { setFormData({ ...formData, appliedUserIds: formData.appliedUserIds.includes(userId) ? formData.appliedUserIds.filter(id => id !== userId) : [...formData.appliedUserIds, userId] }); };
@@ -502,9 +634,55 @@ const PolicyEditModal: React.FC<{
           {activeTab === 'assignments' && (
              <div className="space-y-6">
                <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${formData.targetAll ? 'border-primary bg-primary-soft text-primary-dark' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'}`} onClick={() => setFormData({...formData, targetAll: !formData.targetAll})}><div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.targetAll ? 'bg-white/50' : 'bg-slate-100'}`}><Globe size={20} className={formData.targetAll ? 'text-primary' : 'text-slate-400'} /></div><div><h4 className="text-sm font-bold">全员应用 (Global Scope)</h4><p className={`text-xs mt-0.5 ${formData.targetAll ? 'text-primary-dark/80' : 'text-slate-400'}`}>作为默认策略应用于所有未被特定规则覆盖的用户</p></div></div>{formData.targetAll ? (<div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white"><Check size={14} strokeWidth={3} /></div>) : (<div className="w-6 h-6 rounded-full border-2 border-slate-300"></div>)}</div>
-               <div className={`space-y-3 transition-opacity ${formData.targetAll ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}><div className="flex justify-between items-end"><h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">应用部门 (部门级默认)</h4><button onClick={() => setIsDeptSelectorOpen(true)} className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"><Plus size={14} /> 添加部门</button></div><div className="min-h-[100px] p-3 border border-slate-200 rounded-xl bg-slate-50/30">{formData.appliedDepartments.length === 0 ? (<div className="h-full flex flex-col items-center justify-center text-slate-300 py-4"><FolderTree size={24} className="mb-2 opacity-50" /><span className="text-xs font-bold">暂无选择部门</span></div>) : (<div className="space-y-1">{formData.appliedDepartments.map(d => <div key={d} className="flex justify-between p-2 bg-white rounded border border-slate-200"><span>{d}</span><button onClick={() => removeDepartment(d)}><Trash2 size={14}/></button></div>)}</div>)}</div></div>
+               
+               <div className={`space-y-3 transition-opacity ${formData.targetAll ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                   <div className="flex justify-between items-end">
+                       <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">应用部门 (部门级默认)</h4>
+                       <button onClick={() => setIsDeptSelectorOpen(true)} className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"><Plus size={14} /> 添加部门</button>
+                   </div>
+                   {/* Hierarchical Tree View for Depts */}
+                   <div className="min-h-[120px] max-h-[250px] overflow-y-auto p-2 border border-slate-200 rounded-xl bg-slate-50/30">
+                       {deptTree.length === 0 ? (
+                           <div className="h-full flex flex-col items-center justify-center text-slate-300 py-6">
+                               <FolderTree size={24} className="mb-2 opacity-50" />
+                               <span className="text-xs font-bold">暂无选择部门</span>
+                           </div>
+                       ) : (
+                           <div className="pl-1">
+                               {deptTree.map((node, i) => (
+                                  <TreeItem key={node.id} node={node} onToggle={(id) => removeDepartment(id)} />
+                               ))}
+                           </div>
+                       )}
+                   </div>
+               </div>
+               
                <div className="w-full h-px bg-slate-100"></div>
-               <div className="space-y-3"><div className="flex justify-between items-end"><div><h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">特例用户 (叠加策略)</h4><p className="text-[10px] text-slate-400 mt-1">注意：选中用户将叠加此策略的配额（取最大值），支持一人多策略。</p></div><button onClick={() => setIsUserSelectorOpen(true)} className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"><Plus size={14} /> 添加用户</button></div><div className="min-h-[100px] p-3 border border-slate-200 rounded-xl bg-slate-50/30">{formData.appliedUserIds.length === 0 ? (<div className="h-full flex flex-col items-center justify-center text-slate-300 py-4"><Users size={24} className="mb-2 opacity-50" /><span className="text-xs font-bold">暂无特例用户</span></div>) : (<div className="space-y-1">{formData.appliedUserIds.map(uid => <div key={uid} className="flex justify-between p-2 bg-white rounded border border-slate-200"><span>{users.find(u => u.id === uid)?.name}</span><button onClick={() => toggleUser(uid)}><Trash2 size={14}/></button></div>)}</div>)}</div></div>
+               
+               <div className="space-y-3">
+                   <div className="flex justify-between items-end">
+                       <div>
+                           <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">特例用户 (叠加策略)</h4>
+                           <p className="text-[10px] text-slate-400 mt-1">注意：选中用户将叠加此策略的配额（取最大值），支持一人多策略。</p>
+                       </div>
+                       <button onClick={() => setIsUserSelectorOpen(true)} className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"><Plus size={14} /> 添加用户</button>
+                   </div>
+                   {/* Hierarchical Tree View for Users */}
+                   <div className="min-h-[120px] max-h-[250px] overflow-y-auto p-2 border border-slate-200 rounded-xl bg-slate-50/30">
+                       {userTree.length === 0 ? (
+                           <div className="h-full flex flex-col items-center justify-center text-slate-300 py-6">
+                               <Users size={24} className="mb-2 opacity-50" />
+                               <span className="text-xs font-bold">暂无特例用户</span>
+                           </div>
+                       ) : (
+                           <div className="pl-1">
+                               {userTree.map((node, i) => (
+                                  <TreeItem key={node.id} node={node} onToggle={(id, type) => { if(type === 'user') toggleUser(id); }} />
+                               ))}
+                           </div>
+                       )}
+                   </div>
+               </div>
              </div>
           )}
         </div>

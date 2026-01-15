@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, Globe, Zap, 
   MessageSquare, CheckCircle, 
@@ -7,7 +7,7 @@ import {
   FileText, Cpu, Plug, 
   BrainCircuit, Database, Search, Code2, Sparkles, X,
   Key, Link, Settings2, Mic, Volume2, Lightbulb, Paperclip, AlertCircle, Loader2, ChevronRight, Edit3, 
-  MessageCircle, HelpCircle, Quote, ShieldCheck, PenTool, LayoutGrid, Lock, Users, Building2
+  MessageCircle, HelpCircle, Quote, ShieldCheck, PenTool, LayoutGrid, Lock, Users, Building2, Check, ChevronDown
 } from 'lucide-react';
 import { AppData, WorkflowInputDef } from '../types';
 
@@ -72,8 +72,22 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
   // Visibility Scope State
   const [visibilityConfig, setVisibilityConfig] = useState({
     type: (initialData?.visibility || 'public') as 'private' | 'department' | 'public',
-    target: initialData?.targetAudience || ''
+    targets: initialData?.targetAudience ? initialData.targetAudience.split(',').filter(Boolean) : [] as string[]
   });
+
+  const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
+  const deptDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (deptDropdownRef.current && !deptDropdownRef.current.contains(event.target as Node)) {
+        setIsDeptDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // External Form State
   const [externalConfig, setExternalConfig] = useState({
@@ -111,6 +125,22 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
   });
 
   // --- Handlers ---
+  const toggleDepartment = (dept: string) => {
+    setVisibilityConfig(prev => {
+      const exists = prev.targets.includes(dept);
+      const newTargets = exists 
+        ? prev.targets.filter(t => t !== dept)
+        : [...prev.targets, dept];
+      return { ...prev, targets: newTargets };
+    });
+  };
+
+  const removeDepartment = (dept: string) => {
+    setVisibilityConfig(prev => ({
+      ...prev,
+      targets: prev.targets.filter(t => t !== dept)
+    }));
+  };
 
   const handleExternalSubmit = () => {
     setIsSubmitting(true);
@@ -132,7 +162,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
         capabilities: capabilities,
         welcomeMessage: capabilities.welcomeMessage ? welcomeMessageContent : undefined,
         visibility: visibilityConfig.type,
-        targetAudience: visibilityConfig.type === 'department' ? visibilityConfig.target : undefined
+        targetAudience: visibilityConfig.type === 'department' ? visibilityConfig.targets.join(',') : undefined
       });
       setIsSubmitting(false);
     }, 1500);
@@ -164,7 +194,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
             knowledgeBaseIds: nativeConfig.knowledgeFiles
         },
         visibility: visibilityConfig.type,
-        targetAudience: visibilityConfig.type === 'department' ? visibilityConfig.target : undefined
+        targetAudience: visibilityConfig.type === 'department' ? visibilityConfig.targets.join(',') : undefined
       });
       setIsSubmitting(false);
     }, 1500);
@@ -456,16 +486,20 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                  {/* Private */}
                  <div 
                     onClick={() => setVisibilityConfig({ ...visibilityConfig, type: 'private' })}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-3 ${visibilityConfig.type === 'private' ? 'border-slate-800 bg-slate-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                    className={`p-5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between h-32 relative overflow-hidden group ${visibilityConfig.type === 'private' ? 'border-primary bg-primary-soft/30' : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'}`}
                  >
-                    <div className="flex items-center justify-between">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${visibilityConfig.type === 'private' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                            <Lock size={16} />
+                    <div className="flex justify-between items-start z-10">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${visibilityConfig.type === 'private' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}`}>
+                            <Lock size={20} />
                         </div>
-                        {visibilityConfig.type === 'private' && <CheckCircle size={16} className="text-slate-800" />}
+                        {visibilityConfig.type === 'private' && (
+                            <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center animate-in zoom-in">
+                                <Check size={14} strokeWidth={3} />
+                            </div>
+                        )}
                     </div>
-                    <div>
-                        <div className="font-bold text-slate-700 text-sm">仅个人可见</div>
+                    <div className="z-10">
+                        <div className={`font-bold text-sm ${visibilityConfig.type === 'private' ? 'text-slate-900' : 'text-slate-700'}`}>仅个人可见</div>
                         <div className="text-xs text-slate-400 mt-1">仅自己和管理员可访问</div>
                     </div>
                  </div>
@@ -473,16 +507,20 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                  {/* Department */}
                  <div 
                     onClick={() => setVisibilityConfig({ ...visibilityConfig, type: 'department' })}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-3 ${visibilityConfig.type === 'department' ? 'border-indigo-500 bg-indigo-50/30' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                    className={`p-5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between h-32 relative overflow-hidden group ${visibilityConfig.type === 'department' ? 'border-blue-500 bg-blue-50/30' : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'}`}
                  >
-                    <div className="flex items-center justify-between">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${visibilityConfig.type === 'department' ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                            <Users size={16} />
+                    <div className="flex justify-between items-start z-10">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${visibilityConfig.type === 'department' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}`}>
+                            <Users size={20} />
                         </div>
-                        {visibilityConfig.type === 'department' && <CheckCircle size={16} className="text-indigo-500" />}
+                        {visibilityConfig.type === 'department' && (
+                            <div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center animate-in zoom-in">
+                                <Check size={14} strokeWidth={3} />
+                            </div>
+                        )}
                     </div>
-                    <div>
-                        <div className="font-bold text-slate-700 text-sm">指定部门</div>
+                    <div className="z-10">
+                        <div className={`font-bold text-sm ${visibilityConfig.type === 'department' ? 'text-slate-900' : 'text-slate-700'}`}>指定部门</div>
                         <div className="text-xs text-slate-400 mt-1">仅特定部门成员可访问</div>
                     </div>
                  </div>
@@ -490,38 +528,77 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                  {/* Public */}
                  <div 
                     onClick={() => setVisibilityConfig({ ...visibilityConfig, type: 'public' })}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-3 ${visibilityConfig.type === 'public' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                    className={`p-5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between h-32 relative overflow-hidden group ${visibilityConfig.type === 'public' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'}`}
                  >
-                    <div className="flex items-center justify-between">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${visibilityConfig.type === 'public' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                            <Globe size={16} />
+                    <div className="flex justify-between items-start z-10">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${visibilityConfig.type === 'public' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}`}>
+                            <Globe size={20} />
                         </div>
-                        {visibilityConfig.type === 'public' && <CheckCircle size={16} className="text-emerald-500" />}
+                        {visibilityConfig.type === 'public' && (
+                            <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center animate-in zoom-in">
+                                <Check size={14} strokeWidth={3} />
+                            </div>
+                        )}
                     </div>
-                    <div>
-                        <div className="font-bold text-slate-700 text-sm">全公司可见</div>
+                    <div className="z-10">
+                        <div className={`font-bold text-sm ${visibilityConfig.type === 'public' ? 'text-slate-900' : 'text-slate-700'}`}>全公司可见</div>
                         <div className="text-xs text-slate-400 mt-1">所有员工均可发现并使用</div>
                     </div>
                  </div>
              </div>
 
-             {/* Department Selection Input */}
+             {/* Department Selection Input (Multi-select) */}
              {visibilityConfig.type === 'department' && (
-                 <div className="animate-in fade-in slide-in-from-top-2">
-                    <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">选择部门</label>
-                    <div className="relative">
-                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                        <select 
-                            value={visibilityConfig.target}
-                            onChange={(e) => setVisibilityConfig({ ...visibilityConfig, target: e.target.value })}
-                            className="w-full pl-11 pr-4 py-3 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                 <div className="animate-in fade-in slide-in-from-top-2 pt-2">
+                    <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-3">选择部门 (可多选)</label>
+                    
+                    <div className="relative" ref={deptDropdownRef}>
+                        <div 
+                           onClick={() => setIsDeptDropdownOpen(!isDeptDropdownOpen)}
+                           className={`w-full min-h-[50px] px-3 py-2 rounded-xl bg-white border cursor-text transition-all flex flex-wrap gap-2 items-center ${isDeptDropdownOpen ? 'border-blue-500 ring-4 ring-blue-500/10' : 'border-slate-200 hover:border-slate-300'}`}
                         >
-                            <option value="" disabled>请选择目标部门</option>
-                            {DEPARTMENTS.map(dept => (
-                                <option key={dept} value={dept}>{dept}</option>
-                            ))}
-                        </select>
-                        <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 rotate-90" size={16} />
+                           {visibilityConfig.targets.length === 0 && (
+                              <span className="text-slate-400 text-sm font-medium ml-1">请选择部门...</span>
+                           )}
+                           
+                           {visibilityConfig.targets.map(dept => (
+                              <div key={dept} onClick={(e) => { e.stopPropagation(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100 group animate-in zoom-in duration-200">
+                                 <span>{dept}</span>
+                                 <button 
+                                    onClick={(e) => { e.stopPropagation(); removeDepartment(dept); }}
+                                    className="p-0.5 hover:bg-blue-100 rounded-full text-blue-400 hover:text-blue-600 transition-colors"
+                                 >
+                                    <X size={12} />
+                                 </button>
+                              </div>
+                           ))}
+
+                           <div className="ml-auto pr-2 text-slate-400">
+                              <ChevronDown size={16} className={`transition-transform duration-200 ${isDeptDropdownOpen ? 'rotate-180' : ''}`} />
+                           </div>
+                        </div>
+
+                        {/* Dropdown Menu */}
+                        {isDeptDropdownOpen && (
+                           <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto p-2 animate-in fade-in slide-in-from-top-2 ring-1 ring-black/5">
+                              {DEPARTMENTS.map(dept => {
+                                 const isSelected = visibilityConfig.targets.includes(dept);
+                                 return (
+                                    <div 
+                                       key={dept}
+                                       onClick={() => toggleDepartment(dept)}
+                                       className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                       <div className="flex items-center gap-2">
+                                          <Building2 size={16} className={isSelected ? 'text-blue-500' : 'text-slate-400'} />
+                                          <span className={`text-sm ${isSelected ? 'font-bold' : 'font-medium'}`}>{dept}</span>
+                                       </div>
+                                       {isSelected && <Check size={16} className="text-blue-600" />}
+                                    </div>
+                                 );
+                              })}
+                           </div>
+                        )}
                     </div>
                  </div>
              )}
