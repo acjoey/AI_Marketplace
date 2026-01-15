@@ -7,7 +7,7 @@ import {
   Sliders, Trash2, 
   BarChart2, DollarSign, Database, ArrowUpDown, 
   Cpu, Globe, UserCog, Edit3, X, Building2, Plus, Check, AlertTriangle, Shield, Crown, Wand2, Zap,
-  ChevronRight, ChevronDown, FolderTree, FileText, Calculator
+  ChevronRight, ChevronDown, FolderTree, Calculator, Info
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -20,7 +20,7 @@ interface AppQuotaUsage {
   appId: string;
   appName: string;
   used: number;
-  limit?: number | 'unlimited'; // Logic change: Limit is calculated dynamically now
+  limit?: number | 'unlimited'; 
   unit: string; 
   modelId: string; 
 }
@@ -35,7 +35,7 @@ interface User {
   role: UserRole; 
   status: 'active' | 'disabled';
   lastActive: string;
-  assignedPolicyIds?: string[]; // CHANGED: Support multiple policies
+  assignedPolicyIds?: string[]; 
   quotas: AppQuotaUsage[]; 
 }
 
@@ -53,7 +53,7 @@ interface Department {
   id: string;
   name: string;
   memberCount: number;
-  children?: Department[]; // Added for hierarchy
+  children?: Department[]; 
 }
 
 interface RoleDefinition {
@@ -94,42 +94,42 @@ const INITIAL_ROLE_CONFIG: RoleDefinition[] = [
   {
     key: 'super_admin',
     label: '超级管理员',
-    icon: <Crown size={16} />,
-    color: 'text-amber-600',
-    bg: 'bg-amber-50 border-amber-200',
+    icon: <Crown size={14} />,
+    color: 'text-amber-700',
+    bg: 'bg-amber-50 border-amber-200 ring-amber-100',
     description: '拥有系统最高权限。',
     permissions: []
   },
   {
     key: 'admin',
     label: '管理员',
-    icon: <Shield size={16} />,
-    color: 'text-indigo-600',
-    bg: 'bg-indigo-50 border-indigo-200',
+    icon: <Shield size={14} />,
+    color: 'text-indigo-700',
+    bg: 'bg-indigo-50 border-indigo-200 ring-indigo-100',
     description: '负责运营管理。',
     permissions: []
   },
   {
     key: 'creator',
     label: '创建者',
-    icon: <Wand2 size={16} />,
-    color: 'text-purple-600',
-    bg: 'bg-purple-50 border-purple-200',
+    icon: <Wand2 size={14} />,
+    color: 'text-purple-700',
+    bg: 'bg-purple-50 border-purple-200 ring-purple-100',
     description: '具有 AI 应用开发权限。',
     permissions: []
   },
   {
     key: 'user',
     label: '普通用户',
-    icon: <Users size={16} />,
+    icon: <Users size={14} />,
     color: 'text-slate-600',
-    bg: 'bg-slate-50 border-slate-200',
+    bg: 'bg-slate-50 border-slate-200 ring-slate-100',
     description: '最终使用者。',
     permissions: []
   }
 ];
 
-// Updated Department Data with Hierarchy
+// Department Data with Hierarchy
 const INITIAL_DEPARTMENTS: Department[] = [
   { 
     id: 'd1', name: '产品部', memberCount: 12,
@@ -190,7 +190,7 @@ const INITIAL_POLICIES: Policy[] = [
     ],
     targetAll: false,
     appliedDepartments: [],
-    appliedUserIds: ['u1', 'u3'] // u1 now has both p_dev AND p_vip
+    appliedUserIds: ['u1', 'u3']
   }
 ];
 
@@ -201,7 +201,7 @@ const INITIAL_USERS: User[] = [
   },
   { 
     id: 'u1', name: '张三', email: 'zhangsan@corp.com', department: '企微产品线', role: 'creator', status: 'active', lastActive: '2分钟前',
-    assignedPolicyIds: ['p_dev', 'p_vip'], // Changed to array
+    assignedPolicyIds: ['p_dev', 'p_vip'], 
     quotas: [
       { appId: 'gpt', appName: 'General GPT', used: 2340, unit: '次/月', modelId: 'gpt-4' },
       { appId: 'weekly', appName: '周报助手', used: 4, unit: '次/月', modelId: 'gpt-3.5' },
@@ -210,14 +210,14 @@ const INITIAL_USERS: User[] = [
   { 
     id: 'u2', name: '李四', email: 'lisi@corp.com', department: '后端组', role: 'admin', status: 'active', lastActive: '10分钟前',
     quotas: [
-      { appId: 'gpt', appName: 'General GPT', used: 8900, unit: '次/月', modelId: 'gpt-4' },
+      { appId: 'gpt', appName: 'General GPT', used: 420, unit: '次/月', modelId: 'gpt-4' }, // Modified: High usage but within p_dev limit (500)
     ]
   },
   { 
     id: 'u3', name: '王五', email: 'wangwu@corp.com', department: '市场部', role: 'user', status: 'active', lastActive: '2小时前',
     assignedPolicyIds: ['p_vip'],
     quotas: [
-      { appId: 'gpt', appName: 'General GPT', used: 545, unit: '次/月', modelId: 'gpt-4' },
+      { appId: 'gpt', appName: 'General GPT', used: 1980, unit: '次/月', modelId: 'gpt-4' }, // Modified: Very close to p_vip limit (2000) -> Warning state
     ]
   },
   {
@@ -244,14 +244,46 @@ const MOCK_USAGE_BY_DEPT = [
   { name: '人事部', calls: 1200, tokens: 400, cost: 120 },
 ];
 
-// Helper: Get all policies applicable to a user
-const getApplicablePoliciesForUser = (user: User, allPolicies: Policy[]): Policy[] => {
-  return allPolicies.filter(p => {
-    // 1. Direct Assignment (High Priority conceptually, but limits are merged via MAX)
-    if (p.appliedUserIds.includes(user.id)) return true;
+// Helper: Check if a department is or is a child of target department
+const isDepartmentOrChild = (currentDept: string, targetDept: string, allDepts: Department[]): boolean => {
+    if (currentDept === targetDept) return true;
     
-    // 2. Department Assignment
-    if (p.appliedDepartments.includes(user.department)) return true;
+    // Find the target department node
+    const findDeptNode = (depts: Department[], name: string): Department | null => {
+        for (const d of depts) {
+            if (d.name === name) return d;
+            if (d.children) {
+                const found = findDeptNode(d.children, name);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
+
+    const targetNode = findDeptNode(allDepts, targetDept);
+    if (!targetNode || !targetNode.children) return false;
+
+    // Check if currentDept is in targetNode's children recursively
+    const isChild = (depts: Department[], name: string): boolean => {
+        for (const d of depts) {
+            if (d.name === name) return true;
+            if (d.children && isChild(d.children, name)) return true;
+        }
+        return false;
+    };
+
+    return isChild(targetNode.children, currentDept);
+};
+
+// Helper: Get all policies applicable to a user
+const getApplicablePoliciesForUser = (user: User, allPolicies: Policy[], allDepts: Department[]): Policy[] => {
+  return allPolicies.filter(p => {
+    // 1. Direct Assignment (High Priority)
+    if (user.assignedPolicyIds?.includes(p.id)) return true;
+    if (p.appliedUserIds.includes(user.id)) return true; 
+    
+    // 2. Department Assignment (Include Hierarchy)
+    if (p.appliedDepartments.some(deptName => isDepartmentOrChild(user.department, deptName, allDepts))) return true;
     
     // 3. Global Target
     if (p.targetAll) return true;
@@ -260,7 +292,7 @@ const getApplicablePoliciesForUser = (user: User, allPolicies: Policy[]): Policy
   });
 };
 
-// Helper: Calculate effective limit for a model based on multiple policies (MAX logic)
+// Helper: Calculate effective limit
 const getEffectiveModelLimit = (modelId: string, policies: Policy[]): number | 'unlimited' => {
   let maxLimit: number = 0;
   let hasUnlimited = false;
@@ -344,112 +376,48 @@ const RoleEditModal: React.FC<{
   );
 };
 
-// 2. Department Selector Modal
+// 2. Department Selector Modal 
 const DepartmentSelectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   departments: Department[];
-  selectedDepartments: string[]; // List of department NAMES
+  selectedDepartments: string[];
   onConfirm: (selected: string[]) => void;
 }> = ({ isOpen, onClose, departments, selectedDepartments, onConfirm }) => {
   const [tempSelected, setTempSelected] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (isOpen) setTempSelected(selectedDepartments);
-  }, [isOpen, selectedDepartments]);
-
+  useEffect(() => { if (isOpen) setTempSelected(selectedDepartments); }, [isOpen, selectedDepartments]);
   if (!isOpen) return null;
-
   const toggleSelection = (deptName: string) => {
-    setTempSelected(prev => 
-      prev.includes(deptName) 
-        ? prev.filter(n => n !== deptName)
-        : [...prev, deptName]
-    );
+    setTempSelected(prev => prev.includes(deptName) ? prev.filter(n => n !== deptName) : [...prev, deptName]);
   };
-
   const RecursiveDeptItem: React.FC<{ dept: Department; level: number }> = ({ dept, level }) => {
      const isSelected = tempSelected.includes(dept.name);
      const [isExpanded, setIsExpanded] = useState(true);
      const hasChildren = dept.children && dept.children.length > 0;
-
      return (
         <div className="select-none relative">
-           {level > 0 && (
-              <div 
-                className="absolute border-l-2 border-slate-100 h-full"
-                style={{ left: `${(level) * 20 + 7}px`, top: 0 }} 
-              />
-           )}
-           <div 
-             className={`flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group relative z-10`}
-             style={{ paddingLeft: `${level * 20 + 8}px` }}
-             onClick={() => toggleSelection(dept.name)}
-           >
-              {hasChildren ? (
-                 <button 
-                   onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-                   className="p-0.5 rounded hover:bg-slate-200 text-slate-400"
-                 >
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                 </button>
-              ) : (
-                 <div className="w-4 h-4"></div> // Spacer
-              )}
-              
-              <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300 group-hover:border-indigo-400'}`}>
-                 {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
-              </div>
-              
-              <div className="flex items-center gap-2">
-                 <Building2 size={16} className={isSelected ? 'text-indigo-600' : 'text-slate-400'} />
-                 <span className={`text-sm ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{dept.name}</span>
-              </div>
+           {level > 0 && <div className="absolute border-l-2 border-slate-100 h-full" style={{ left: `${(level) * 20 + 7}px`, top: 0 }} />}
+           <div className={`flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group relative z-10`} style={{ paddingLeft: `${level * 20 + 8}px` }} onClick={() => toggleSelection(dept.name)}>
+              {hasChildren ? (<button onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }} className="p-0.5 rounded hover:bg-slate-200 text-slate-400">{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>) : (<div className="w-4 h-4"></div>)}
+              <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300 group-hover:border-indigo-400'}`}>{isSelected && <Check size={12} className="text-white" strokeWidth={3} />}</div>
+              <div className="flex items-center gap-2"><Building2 size={16} className={isSelected ? 'text-indigo-600' : 'text-slate-400'} /><span className={`text-sm ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{dept.name}</span></div>
            </div>
-           
-           {hasChildren && isExpanded && (
-              <div>
-                 {dept.children!.map(child => (
-                    <RecursiveDeptItem key={child.id} dept={child} level={level + 1} />
-                 ))}
-              </div>
-           )}
+           {hasChildren && isExpanded && <div>{dept.children!.map(child => (<RecursiveDeptItem key={child.id} dept={child} level={level + 1} />))}</div>}
         </div>
      );
   };
-
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[600px] ring-1 ring-black/5">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
-          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <FolderTree size={18} className="text-indigo-600" />
-            选择应用部门
-          </h3>
-          <button onClick={onClose} className="p-1 hover:bg-slate-200/50 rounded-full text-slate-400"><X size={18} /></button>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto p-4 space-y-1">
-           {departments.map(dept => (
-              <RecursiveDeptItem key={dept.id} dept={dept} level={0} />
-           ))}
-        </div>
-
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button>
-            <button 
-              onClick={() => onConfirm(tempSelected)} 
-              className="px-6 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all"
-            >
-              确认 ({tempSelected.length})
-            </button>
-        </div>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80"><h3 className="text-base font-bold text-slate-900 flex items-center gap-2"><FolderTree size={18} className="text-indigo-600" />选择应用部门</h3><button onClick={onClose} className="p-1 hover:bg-slate-200/50 rounded-full text-slate-400"><X size={18} /></button></div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-1">{departments.map(dept => (<RecursiveDeptItem key={dept.id} dept={dept} level={0} />))}</div>
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button><button onClick={() => onConfirm(tempSelected)} className="px-6 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">确认 ({tempSelected.length})</button></div>
       </div>
     </div>
   );
 };
 
-// 3. User Selector Modal (Enhanced)
+// 3. User Selector Modal
 const UserSelectorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -460,141 +428,36 @@ const UserSelectorModal: React.FC<{
 }> = ({ isOpen, onClose, departments, users, selectedUserIds, onConfirm }) => {
   const [tempSelected, setTempSelected] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    if (isOpen) {
-        setTempSelected(selectedUserIds);
-        setSearchQuery('');
-    }
-  }, [isOpen, selectedUserIds]);
-
+  useEffect(() => { if (isOpen) { setTempSelected(selectedUserIds); setSearchQuery(''); } }, [isOpen, selectedUserIds]);
   if (!isOpen) return null;
-
-  const toggleUser = (userId: string) => {
-    setTempSelected(prev => 
-      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
-    );
-  };
-
+  const toggleUser = (userId: string) => { setTempSelected(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]); };
   const RecursiveUserTree: React.FC<{ dept: Department; level: number }> = ({ dept, level }) => {
-     // Users in this specific department node
      const deptUsers = users.filter(u => u.department === dept.name);
-     const filteredDeptUsers = deptUsers.filter(u => 
-        !searchQuery || u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase())
-     );
-     
+     const filteredDeptUsers = deptUsers.filter(u => !searchQuery || u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase()));
      const hasChildren = dept.children && dept.children.length > 0;
      const [isExpanded, setIsExpanded] = useState(true);
-
-     // Visibility Check
      if (filteredDeptUsers.length === 0 && !hasChildren && searchQuery) return null;
-
      return (
         <div className="select-none relative">
-            {/* Hierarchy Line */}
-            {level > 0 && (
-              <div 
-                className="absolute border-l-2 border-slate-100 h-full"
-                style={{ left: `${(level) * 20 + 7}px`, top: 0 }} 
-              />
-            )}
-
-           <div 
-             className={`flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group relative z-10`}
-             style={{ paddingLeft: `${level * 20 + 8}px` }}
-             onClick={() => setIsExpanded(!isExpanded)}
-           >
-              {(hasChildren || filteredDeptUsers.length > 0) ? (
-                 <button className="p-0.5 rounded hover:bg-slate-200 text-slate-400">
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                 </button>
-              ) : <div className="w-4 h-4"></div>}
-              
-              <div className="flex items-center gap-2 text-slate-600">
-                 <Building2 size={16} />
-                 <span className="text-sm font-bold">{dept.name}</span>
-                 {filteredDeptUsers.length > 0 && <span className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">{filteredDeptUsers.length}</span>}
-              </div>
+            {level > 0 && <div className="absolute border-l-2 border-slate-100 h-full" style={{ left: `${(level) * 20 + 7}px`, top: 0 }} />}
+           <div className={`flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group relative z-10`} style={{ paddingLeft: `${level * 20 + 8}px` }} onClick={() => setIsExpanded(!isExpanded)}>
+              {(hasChildren || filteredDeptUsers.length > 0) ? (<button className="p-0.5 rounded hover:bg-slate-200 text-slate-400">{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>) : <div className="w-4 h-4"></div>}
+              <div className="flex items-center gap-2 text-slate-600"><Building2 size={16} /><span className="text-sm font-bold">{dept.name}</span>{filteredDeptUsers.length > 0 && <span className="text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">{filteredDeptUsers.length}</span>}</div>
            </div>
-
-           {isExpanded && (
-              <div>
-                 {filteredDeptUsers.map(user => {
-                     const isSelected = tempSelected.includes(user.id);
-                     return (
-                         <div 
-                           key={user.id}
-                           onClick={(e) => { e.stopPropagation(); toggleUser(user.id); }}
-                           className={`flex items-center justify-between p-2 rounded-xl mb-1 cursor-pointer transition-all border relative z-10 ${isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-transparent border-transparent hover:bg-slate-50'}`}
-                           style={{ marginLeft: `${(level + 1) * 20 + 20}px`, marginRight: '8px' }}
-                         >
-                            <div className="flex items-center gap-3">
-                               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ${isSelected ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-50'}`}>
-                                  {user.name.charAt(0)}
-                               </div>
-                               <div>
-                                  <div className={`text-sm ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{user.name}</div>
-                                  <div className="text-[10px] text-slate-400 leading-none font-medium">{user.email}</div>
-                               </div>
-                            </div>
-                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>
-                               {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
-                            </div>
-                         </div>
-                     );
-                 })}
-                 
-                 {dept.children?.map(child => (
-                    <RecursiveUserTree key={child.id} dept={child} level={level + 1} />
-                 ))}
-              </div>
-           )}
+           {isExpanded && (<div>{filteredDeptUsers.map(user => { const isSelected = tempSelected.includes(user.id); return ( <div key={user.id} onClick={(e) => { e.stopPropagation(); toggleUser(user.id); }} className={`flex items-center justify-between p-2 rounded-xl mb-1 cursor-pointer transition-all border relative z-10 ${isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-transparent border-transparent hover:bg-slate-50'}`} style={{ marginLeft: `${(level + 1) * 20 + 20}px`, marginRight: '8px' }}><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ${isSelected ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-50'}`}>{user.name.charAt(0)}</div><div><div className={`text-sm ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>{user.name}</div><div className="text-[10px] text-slate-400 leading-none font-medium">{user.email}</div></div></div><div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`}>{isSelected && <Check size={12} className="text-white" strokeWidth={3} />}</div></div> ); })}{dept.children?.map(child => (<RecursiveUserTree key={child.id} dept={child} level={level + 1} />))}</div>)}
         </div>
      );
   };
-
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[650px] ring-1 ring-black/5">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Users size={18} className="text-indigo-600" />
-                选择特例用户
-            </h3>
-            <button onClick={onClose} className="p-1 hover:bg-slate-200/50 rounded-full text-slate-400"><X size={18} /></button>
-          </div>
-          <div className="relative">
-             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-             <input 
-               className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-medium focus:outline-none focus:border-indigo-400 transition-all shadow-sm"
-               placeholder="搜索用户姓名或邮箱..."
-               value={searchQuery}
-               onChange={(e) => setSearchQuery(e.target.value)}
-             />
-          </div>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto p-4 space-y-1">
-           {departments.map(dept => (
-              <RecursiveUserTree key={dept.id} dept={dept} level={0} />
-           ))}
-        </div>
-
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button>
-            <button 
-              onClick={() => onConfirm(tempSelected)} 
-              className="px-6 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all"
-            >
-              确认选择 ({tempSelected.length})
-            </button>
-        </div>
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/80 space-y-3"><div className="flex items-center justify-between"><h3 className="text-base font-bold text-slate-900 flex items-center gap-2"><Users size={18} className="text-indigo-600" />选择特例用户</h3><button onClick={onClose} className="p-1 hover:bg-slate-200/50 rounded-full text-slate-400"><X size={18} /></button></div><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} /><input className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-medium focus:outline-none focus:border-indigo-400 transition-all shadow-sm" placeholder="搜索用户姓名或邮箱..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div></div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-1">{departments.map(dept => (<RecursiveUserTree key={dept.id} dept={dept} level={0} />))}</div>
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button><button onClick={() => onConfirm(tempSelected)} className="px-6 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">确认选择 ({tempSelected.length})</button></div>
       </div>
     </div>
   );
 };
-
 
 // 4. Policy Edit Modal
 const PolicyEditModal: React.FC<{
@@ -606,420 +469,227 @@ const PolicyEditModal: React.FC<{
   onClose: () => void;
   onSave: (policy: Policy) => void;
 }> = ({ policy, departments, users, policies, isOpen, onClose, onSave }) => {
-  const [formData, setFormData] = useState<Policy>({
-    id: '', name: '', description: '', modelQuotas: [], appliedDepartments: [], appliedUserIds: [], targetAll: false
-  });
+  const [formData, setFormData] = useState<Policy>({ id: '', name: '', description: '', modelQuotas: [], appliedDepartments: [], appliedUserIds: [], targetAll: false });
   const [activeTab, setActiveTab] = useState<'basics' | 'assignments'>('basics');
-  
-  // New State for Selectors
   const [isDeptSelectorOpen, setIsDeptSelectorOpen] = useState(false);
   const [isUserSelectorOpen, setIsUserSelectorOpen] = useState(false);
-
   useEffect(() => {
-    if (policy) {
-      setFormData({ ...policy });
-    } else {
-      setFormData({
-        id: Date.now().toString(),
-        name: '',
-        description: '',
-        modelQuotas: MOCK_MODELS.map(m => ({ modelId: m.id, limit: 100 })),
-        targetAll: false,
-        appliedDepartments: [],
-        appliedUserIds: []
-      });
-    }
+    if (policy) { setFormData({ ...policy }); } 
+    else { setFormData({ id: Date.now().toString(), name: '', description: '', modelQuotas: MOCK_MODELS.map(m => ({ modelId: m.id, limit: 100 })), targetAll: false, appliedDepartments: [], appliedUserIds: [] }); }
   }, [policy, isOpen]);
-
   if (!isOpen) return null;
-
-  const handleQuotaChange = (modelId: string, limitStr: string) => {
-    const newQuotas = [...formData.modelQuotas];
-    const index = newQuotas.findIndex(q => q.modelId === modelId);
-    const newLimit = limitStr === 'unlimited' ? 'unlimited' : parseInt(limitStr) || 0;
-    
-    if (index >= 0) {
-      newQuotas[index] = { ...newQuotas[index], limit: newLimit };
-    } else {
-      newQuotas.push({ modelId, limit: newLimit });
-    }
-    setFormData({ ...formData, modelQuotas: newQuotas });
-  };
-
-  const removeDepartment = (deptName: string) => {
-    const newDepts = formData.appliedDepartments.filter(d => d !== deptName);
-    setFormData({ ...formData, appliedDepartments: newDepts });
-  };
-
-  const handleDeptConfirm = (selected: string[]) => {
-      setFormData({ ...formData, appliedDepartments: selected });
-      setIsDeptSelectorOpen(false);
-  };
-
-  const toggleUser = (userId: string) => {
-    const newUsers = formData.appliedUserIds.includes(userId)
-      ? formData.appliedUserIds.filter(id => id !== userId)
-      : [...formData.appliedUserIds, userId];
-    setFormData({ ...formData, appliedUserIds: newUsers });
-  };
-
-  const handleUserConfirm = (selected: string[]) => {
-      setFormData({ ...formData, appliedUserIds: selected });
-      setIsUserSelectorOpen(false);
-  };
-
-  // Helper to render tree of SELECTED departments
-  const renderSelectedTree = (nodes: Department[], level = 0): React.ReactNode => {
-      return nodes.map(node => {
-          const isSelected = formData.appliedDepartments.includes(node.name);
-          // Check if any children (deep) are selected to decide if we show this parent container
-          const hasSelectedDescendant = (n: Department): boolean => {
-              if (n.children) {
-                  return n.children.some(c => formData.appliedDepartments.includes(c.name) || hasSelectedDescendant(c));
-              }
-              return false;
-          };
-          
-          const showNode = isSelected || hasSelectedDescendant(node);
-
-          if (!showNode) return null;
-
-          return (
-              <div key={node.id} className="relative">
-                  {/* Vertical line connector for children */}
-                  {level > 0 && (
-                      <div className="absolute left-[-14px] top-0 bottom-0 w-px bg-slate-200"></div>
-                  )}
-                  {level > 0 && (
-                      <div className="absolute left-[-14px] top-3.5 w-3 h-px bg-slate-200"></div>
-                  )}
-
-                  <div 
-                      className={`flex items-center justify-between p-2 rounded-lg mb-1 border ${isSelected ? 'bg-indigo-50 border-indigo-100' : 'bg-transparent border-transparent'}`}
-                      style={{ marginLeft: level > 0 ? '4px' : '0' }}
-                  >
-                      <div className="flex items-center gap-2">
-                           <Building2 size={16} className={isSelected ? 'text-indigo-600' : 'text-slate-300'} />
-                           <span className={`text-sm ${isSelected ? 'font-bold text-slate-800' : 'text-slate-500'}`}>{node.name}</span>
-                      </div>
-                      {isSelected && (
-                          <button 
-                            onClick={() => removeDepartment(node.name)}
-                            className="p-1 hover:bg-red-100 rounded text-slate-300 hover:text-red-500 transition-colors"
-                          >
-                             <Trash2 size={14} />
-                          </button>
-                      )}
-                  </div>
-                  {node.children && (
-                      <div className="pl-6 border-l border-slate-100/0 ml-2">
-                          {renderSelectedTree(node.children, level + 1)}
-                      </div>
-                  )}
-              </div>
-          );
-      });
-  };
-
-  // Helper to render tree of SELECTED users (Enhanced)
-  const renderSelectedUserTree = (nodes: Department[], level = 0): React.ReactNode => {
-      return nodes.map(node => {
-          // Find users in this department that are selected
-          const deptUsers = users.filter(u => u.department === node.name && formData.appliedUserIds.includes(u.id));
-          
-          // Check if children have any selected users (to decide if we show this node)
-          const hasSelectedDescendant = (n: Department): boolean => {
-              // Does this node have selected users?
-              if (users.some(u => u.department === n.name && formData.appliedUserIds.includes(u.id))) return true;
-              // Check children
-              if (n.children) {
-                  return n.children.some(c => hasSelectedDescendant(c));
-              }
-              return false;
-          };
-          
-          const showNode = deptUsers.length > 0 || hasSelectedDescendant(node);
-
-          if (!showNode) return null;
-
-          return (
-              <div key={node.id} className="relative">
-                  {/* Vertical line connector for children */}
-                  {level > 0 && (
-                      <div className="absolute left-[-14px] top-0 bottom-0 w-px bg-slate-200"></div>
-                  )}
-                  {level > 0 && (
-                      <div className="absolute left-[-14px] top-3.5 w-3 h-px bg-slate-200"></div>
-                  )}
-
-                  {/* Department Header */}
-                  <div 
-                      className={`flex items-center gap-2 p-1 rounded-lg mb-1`}
-                      style={{ marginLeft: level > 0 ? '4px' : '0' }}
-                  >
-                      <Building2 size={14} className="text-slate-300" />
-                      <span className="text-xs font-bold text-slate-500">{node.name}</span>
-                  </div>
-
-                  {/* Users */}
-                  <div className="space-y-1 mb-1" style={{ marginLeft: level > 0 ? '4px' : '0' }}>
-                      {deptUsers.map(user => {
-                          const userOtherPolicyIds = user.assignedPolicyIds?.filter(pid => pid !== formData.id) || [];
-                          const hasOtherPolicies = userOtherPolicyIds.length > 0;
-
-                          return (
-                              <div key={user.id} className="flex items-center justify-between p-2 bg-indigo-50 border border-indigo-100 rounded-lg group shadow-sm">
-                                  <div className="flex items-center gap-2">
-                                      <div className="w-6 h-6 rounded-full bg-indigo-200 flex items-center justify-center text-[10px] font-bold text-indigo-700 border-2 border-indigo-50">
-                                          {user.name.charAt(0)}
-                                      </div>
-                                      <div className="flex flex-col">
-                                          <div className="flex items-center gap-1">
-                                             <span className="text-xs font-bold text-slate-700">{user.name}</span>
-                                             {hasOtherPolicies && (
-                                                <div className="flex items-center text-[9px] text-blue-500 font-bold bg-blue-50 px-1 rounded border border-blue-100" title={`其他关联: ${userOtherPolicyIds.length} 个策略`}>
-                                                   <Layers size={8} className="mr-0.5" /> 叠加
-                                                </div>
-                                             )}
-                                          </div>
-                                          <span className="text-[9px] text-slate-400 leading-none">{user.email}</span>
-                                      </div>
-                                  </div>
-                                  <button 
-                                      onClick={() => toggleUser(user.id)}
-                                      className="p-1.5 hover:bg-red-100 rounded text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                                  >
-                                      <Trash2 size={14} />
-                                  </button>
-                              </div>
-                          );
-                      })}
-                  </div>
-
-                  {/* Children */}
-                  {node.children && (
-                      <div className="pl-6 border-l border-slate-100/0 ml-2">
-                          {renderSelectedUserTree(node.children, level + 1)}
-                      </div>
-                  )}
-              </div>
-          );
-      });
-  };
-
+  const handleQuotaChange = (modelId: string, limitStr: string) => { const newQuotas = [...formData.modelQuotas]; const index = newQuotas.findIndex(q => q.modelId === modelId); const newLimit = limitStr === 'unlimited' ? 'unlimited' : parseInt(limitStr) || 0; if (index >= 0) { newQuotas[index] = { ...newQuotas[index], limit: newLimit }; } else { newQuotas.push({ modelId, limit: newLimit }); } setFormData({ ...formData, modelQuotas: newQuotas }); };
+  const removeDepartment = (deptName: string) => { setFormData({ ...formData, appliedDepartments: formData.appliedDepartments.filter(d => d !== deptName) }); };
+  const toggleUser = (userId: string) => { setFormData({ ...formData, appliedUserIds: formData.appliedUserIds.includes(userId) ? formData.appliedUserIds.filter(id => id !== userId) : [...formData.appliedUserIds, userId] }); };
+  
   return (
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] ring-1 ring-black/5">
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">{policy ? '编辑策略' : '创建新策略'}</h3>
-            <p className="text-sm text-slate-500 mt-0.5">定义模型配额及应用范围</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200/50 rounded-full transition-colors text-slate-400 hover:text-slate-600">
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Modal Tabs */}
-        <div className="flex border-b border-slate-100 px-6">
-           <button 
-             onClick={() => setActiveTab('basics')} 
-             className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'basics' ? 'border-primary text-primary-dark' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-           >
-             配额配置
-           </button>
-           <button 
-             onClick={() => setActiveTab('assignments')} 
-             className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'assignments' ? 'border-primary text-primary-dark' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-           >
-             应用范围
-           </button>
-        </div>
-
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50"><div><h3 className="text-lg font-bold text-slate-900">{policy ? '编辑策略' : '创建新策略'}</h3><p className="text-sm text-slate-500 mt-0.5">定义模型配额及应用范围</p></div><button onClick={onClose} className="p-2 hover:bg-slate-200/50 rounded-full transition-colors text-slate-400 hover:text-slate-600"><X size={20} /></button></div>
+        <div className="flex border-b border-slate-100 px-6"><button onClick={() => setActiveTab('basics')} className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'basics' ? 'border-primary text-primary-dark' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>配额配置</button><button onClick={() => setActiveTab('assignments')} className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'assignments' ? 'border-primary text-primary-dark' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>应用范围</button></div>
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          
           {activeTab === 'basics' && (
             <>
               <div className="space-y-4">
                 <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">策略基础</h4>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-2">策略名称</label>
-                  <input 
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    placeholder="例如：研发部专用策略"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-2">描述</label>
-                  <textarea 
-                    value={formData.description}
-                    onChange={e => setFormData({...formData, description: e.target.value})}
-                    placeholder="简述该策略适用的场景..."
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none resize-none h-20 transition-all"
-                  />
-                </div>
+                <div><label className="block text-xs font-bold text-slate-600 mb-2">策略名称</label><input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="例如：研发部专用策略" className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all" /></div>
+                <div><label className="block text-xs font-bold text-slate-600 mb-2">描述</label><textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="简述该策略适用的场景..." className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none resize-none h-20 transition-all" /></div>
               </div>
-
-              <div className="space-y-4 pt-2 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">模型额度限制 (月度)</h4>
-                </div>
-                
-                <div className="space-y-3 bg-slate-50/50 rounded-xl p-3 border border-slate-100">
-                  {MOCK_MODELS.map(model => {
-                    const quota = formData.modelQuotas.find(q => q.modelId === model.id);
-                    const limit = quota ? quota.limit : 0;
-                    const isUnlimited = limit === 'unlimited';
-
-                    return (
-                      <div key={model.id} className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100 text-slate-500">
-                              <Cpu size={14} />
-                            </div>
-                            <div className="flex flex-col">
-                               <span className="text-sm font-bold text-slate-700">{model.name}</span>
-                               <span className="text-[10px] text-slate-400 font-medium">{model.provider}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="relative w-28">
-                                <input 
-                                  type="text" 
-                                  disabled={isUnlimited}
-                                  value={isUnlimited ? '' : limit}
-                                  onChange={(e) => handleQuotaChange(model.id, e.target.value)}
-                                  className={`w-full px-3 py-2 rounded-lg border text-sm font-bold text-right outline-none transition-all ${isUnlimited ? 'bg-slate-50 text-slate-400' : 'bg-white border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10'}`}
-                                  placeholder={isUnlimited ? "∞" : "0"}
-                                />
-                                {!isUnlimited && <span className="absolute right-8 top-2.5 text-[10px] text-slate-400 pointer-events-none">次</span>}
-                            </div>
-                            <button 
-                                onClick={() => handleQuotaChange(model.id, isUnlimited ? '500' : 'unlimited')}
-                                className={`p-2 rounded-lg border transition-all ${isUnlimited ? 'bg-primary text-slate-900 border-primary shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600'}`}
-                                title={isUnlimited ? "设为有限" : "设为无限"}
-                            >
-                              <Activity size={16} />
-                            </button>
-                          </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <div className="space-y-4 pt-2 border-t border-slate-100"><div className="flex items-center justify-between"><h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">模型额度限制 (月度)</h4></div><div className="space-y-3 bg-slate-50/50 rounded-xl p-3 border border-slate-100">{MOCK_MODELS.map(model => { const quota = formData.modelQuotas.find(q => q.modelId === model.id); const limit = quota ? quota.limit : 0; const isUnlimited = limit === 'unlimited'; return ( <div key={model.id} className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100 text-slate-500"><Cpu size={14} /></div><div className="flex flex-col"><span className="text-sm font-bold text-slate-700">{model.name}</span><span className="text-[10px] text-slate-400 font-medium">{model.provider}</span></div></div><div className="flex items-center gap-2"><div className="relative w-28"><input type="text" disabled={isUnlimited} value={isUnlimited ? '' : limit} onChange={(e) => handleQuotaChange(model.id, e.target.value)} className={`w-full px-3 py-2 rounded-lg border text-sm font-bold text-right outline-none transition-all ${isUnlimited ? 'bg-slate-50 text-slate-400' : 'bg-white border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/10'}`} placeholder={isUnlimited ? "∞" : "0"} />{!isUnlimited && <span className="absolute right-8 top-2.5 text-[10px] text-slate-400 pointer-events-none">次</span>}</div><button onClick={() => handleQuotaChange(model.id, isUnlimited ? '500' : 'unlimited')} className={`p-2 rounded-lg border transition-all ${isUnlimited ? 'bg-primary text-slate-900 border-primary shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600'}`} title={isUnlimited ? "设为有限" : "设为无限"}><Activity size={16} /></button></div></div> ); })}</div></div>
             </>
           )}
-
           {activeTab === 'assignments' && (
              <div className="space-y-6">
-               
-               {/* 1. Global Scope */}
-               <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${formData.targetAll ? 'border-primary bg-primary-soft text-primary-dark' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'}`} onClick={() => setFormData({...formData, targetAll: !formData.targetAll})}>
-                  <div className="flex items-center gap-3">
-                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.targetAll ? 'bg-white/50' : 'bg-slate-100'}`}>
-                        <Globe size={20} className={formData.targetAll ? 'text-primary' : 'text-slate-400'} />
-                     </div>
-                     <div>
-                        <h4 className="text-sm font-bold">全员应用 (Global Scope)</h4>
-                        <p className={`text-xs mt-0.5 ${formData.targetAll ? 'text-primary-dark/80' : 'text-slate-400'}`}>作为默认策略应用于所有未被特定规则覆盖的用户</p>
-                     </div>
-                  </div>
-                  {formData.targetAll ? (
-                     <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white"><Check size={14} strokeWidth={3} /></div>
-                  ) : (
-                     <div className="w-6 h-6 rounded-full border-2 border-slate-300"></div>
-                  )}
-               </div>
-
-               {/* 2. Department Selector */}
-               <div className={`space-y-3 transition-opacity ${formData.targetAll ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                  <div className="flex justify-between items-end">
-                      <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">应用部门 (部门级默认)</h4>
-                      <button 
-                        onClick={() => setIsDeptSelectorOpen(true)}
-                        className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"
-                      >
-                         <Plus size={14} /> 添加部门
-                      </button>
-                  </div>
-                  
-                  {/* Tree Display of Selected */}
-                  <div className="min-h-[100px] p-3 border border-slate-200 rounded-xl bg-slate-50/30">
-                     {formData.appliedDepartments.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-300 py-4">
-                           <FolderTree size={24} className="mb-2 opacity-50" />
-                           <span className="text-xs font-bold">暂无选择部门</span>
-                        </div>
-                     ) : (
-                        <div className="space-y-1">
-                           {renderSelectedTree(departments)}
-                        </div>
-                     )}
-                  </div>
-               </div>
-
+               <div className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${formData.targetAll ? 'border-primary bg-primary-soft text-primary-dark' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'}`} onClick={() => setFormData({...formData, targetAll: !formData.targetAll})}><div className="flex items-center gap-3"><div className={`w-10 h-10 rounded-full flex items-center justify-center ${formData.targetAll ? 'bg-white/50' : 'bg-slate-100'}`}><Globe size={20} className={formData.targetAll ? 'text-primary' : 'text-slate-400'} /></div><div><h4 className="text-sm font-bold">全员应用 (Global Scope)</h4><p className={`text-xs mt-0.5 ${formData.targetAll ? 'text-primary-dark/80' : 'text-slate-400'}`}>作为默认策略应用于所有未被特定规则覆盖的用户</p></div></div>{formData.targetAll ? (<div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white"><Check size={14} strokeWidth={3} /></div>) : (<div className="w-6 h-6 rounded-full border-2 border-slate-300"></div>)}</div>
+               <div className={`space-y-3 transition-opacity ${formData.targetAll ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}><div className="flex justify-between items-end"><h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">应用部门 (部门级默认)</h4><button onClick={() => setIsDeptSelectorOpen(true)} className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"><Plus size={14} /> 添加部门</button></div><div className="min-h-[100px] p-3 border border-slate-200 rounded-xl bg-slate-50/30">{formData.appliedDepartments.length === 0 ? (<div className="h-full flex flex-col items-center justify-center text-slate-300 py-4"><FolderTree size={24} className="mb-2 opacity-50" /><span className="text-xs font-bold">暂无选择部门</span></div>) : (<div className="space-y-1">{formData.appliedDepartments.map(d => <div key={d} className="flex justify-between p-2 bg-white rounded border border-slate-200"><span>{d}</span><button onClick={() => removeDepartment(d)}><Trash2 size={14}/></button></div>)}</div>)}</div></div>
                <div className="w-full h-px bg-slate-100"></div>
-
-               {/* 3. User Selector - Updated */}
-               <div className="space-y-3">
-                  <div className="flex justify-between items-end">
-                    <div>
-                        <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">特例用户 (叠加策略)</h4>
-                        <p className="text-[10px] text-slate-400 mt-1">注意：选中用户将叠加此策略的配额（取最大值），支持一人多策略。</p>
-                    </div>
-                    <button 
-                      onClick={() => setIsUserSelectorOpen(true)}
-                      className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"
-                    >
-                       <Plus size={14} /> 添加用户
-                    </button>
-                  </div>
-                  
-                  {/* Tree Display of Selected Users */}
-                  <div className="min-h-[100px] p-3 border border-slate-200 rounded-xl bg-slate-50/30">
-                     {formData.appliedUserIds.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-300 py-4">
-                           <Users size={24} className="mb-2 opacity-50" />
-                           <span className="text-xs font-bold">暂无特例用户</span>
-                        </div>
-                     ) : (
-                        <div className="space-y-1">
-                           {renderSelectedUserTree(departments)}
-                        </div>
-                     )}
-                  </div>
-               </div>
+               <div className="space-y-3"><div className="flex justify-between items-end"><div><h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">特例用户 (叠加策略)</h4><p className="text-[10px] text-slate-400 mt-1">注意：选中用户将叠加此策略的配额（取最大值），支持一人多策略。</p></div><button onClick={() => setIsUserSelectorOpen(true)} className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-1 transition-colors"><Plus size={14} /> 添加用户</button></div><div className="min-h-[100px] p-3 border border-slate-200 rounded-xl bg-slate-50/30">{formData.appliedUserIds.length === 0 ? (<div className="h-full flex flex-col items-center justify-center text-slate-300 py-4"><Users size={24} className="mb-2 opacity-50" /><span className="text-xs font-bold">暂无特例用户</span></div>) : (<div className="space-y-1">{formData.appliedUserIds.map(uid => <div key={uid} className="flex justify-between p-2 bg-white rounded border border-slate-200"><span>{users.find(u => u.id === uid)?.name}</span><button onClick={() => toggleUser(uid)}><Trash2 size={14}/></button></div>)}</div>)}</div></div>
              </div>
           )}
         </div>
-
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
-            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button>
-            <button onClick={() => onSave(formData)} className="px-6 py-2.5 rounded-xl text-sm font-bold bg-slate-900 text-white shadow-lg shadow-slate-200 hover:bg-slate-800 hover:shadow-xl transition-all">保存策略</button>
-        </div>
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3"><button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button><button onClick={() => onSave(formData)} className="px-6 py-2.5 rounded-xl text-sm font-bold bg-slate-900 text-white shadow-lg shadow-slate-200 hover:bg-slate-800 hover:shadow-xl transition-all">保存策略</button></div>
       </div>
     </div>
-    
-    <DepartmentSelectorModal 
-        isOpen={isDeptSelectorOpen}
-        onClose={() => setIsDeptSelectorOpen(false)}
-        departments={departments}
-        selectedDepartments={formData.appliedDepartments}
-        onConfirm={handleDeptConfirm}
-    />
-    
-    <UserSelectorModal 
-        isOpen={isUserSelectorOpen}
-        onClose={() => setIsUserSelectorOpen(false)}
-        departments={departments}
-        users={users}
-        selectedUserIds={formData.appliedUserIds}
-        onConfirm={handleUserConfirm}
-    />
+    <DepartmentSelectorModal isOpen={isDeptSelectorOpen} onClose={() => setIsDeptSelectorOpen(false)} departments={departments} selectedDepartments={formData.appliedDepartments} onConfirm={(s) => { setFormData({...formData, appliedDepartments: s}); setIsDeptSelectorOpen(false); }} />
+    <UserSelectorModal isOpen={isUserSelectorOpen} onClose={() => setIsUserSelectorOpen(false)} departments={departments} users={users} selectedUserIds={formData.appliedUserIds} onConfirm={(s) => { setFormData({...formData, appliedUserIds: s}); setIsUserSelectorOpen(false); }} />
     </>
+  );
+};
+
+// 5. User Edit Modal
+const UserEditModal: React.FC<{
+  user: User | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (updatedUser: User) => void;
+  policies: Policy[];
+  roleConfigs: RoleDefinition[];
+  allDepts: Department[]; // Added prop
+}> = ({ user, isOpen, onClose, onSave, policies, roleConfigs, allDepts }) => {
+  const [formData, setFormData] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (user) setFormData({ ...user });
+  }, [user]);
+
+  if (!isOpen || !formData) return null;
+
+  // Calculate current effective quotas for preview
+  const activePolicies = getApplicablePoliciesForUser(formData, policies, allDepts);
+  const effectiveQuotas = MOCK_MODELS.map(model => ({
+      ...model,
+      limit: getEffectiveModelLimit(model.id, activePolicies)
+  }));
+
+  // Calculate aggregated usage per model
+  const getModelUsage = (modelId: string) => {
+    if (!formData || !formData.quotas) return 0;
+    return formData.quotas
+      .filter(q => q.modelId === modelId)
+      .reduce((sum, q) => sum + q.used, 0);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] ring-1 ring-black/5">
+         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-3">
+               <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-600 border border-slate-300">
+                  {formData.name.charAt(0)}
+               </div>
+               <div>
+                  <h3 className="text-lg font-bold text-slate-900">{formData.name}</h3>
+                  <p className="text-xs text-slate-500 font-medium">{formData.email}</p>
+               </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-slate-200/50 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+              <X size={20} />
+            </button>
+         </div>
+
+         <div className="flex-1 overflow-y-auto p-6 space-y-8">
+            {/* 1. Role Setting */}
+            <div>
+               <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Shield size={14} /> 角色权限配置
+               </h4>
+               <div className="grid grid-cols-2 gap-3">
+                  {roleConfigs.map(role => (
+                     <div 
+                       key={role.key}
+                       onClick={() => setFormData({ ...formData, role: role.key })}
+                       className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center gap-3 ${formData.role === role.key ? `bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200` : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                     >
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${role.bg} ${role.color}`}>
+                           {role.icon}
+                        </div>
+                        <div>
+                           <div className={`text-sm font-bold ${formData.role === role.key ? 'text-indigo-900' : 'text-slate-700'}`}>{role.label}</div>
+                           <div className="text-[10px] text-slate-400 leading-tight mt-0.5">基础权限</div>
+                        </div>
+                        {formData.role === role.key && <CheckCircle size={16} className="ml-auto text-indigo-600" />}
+                     </div>
+                  ))}
+               </div>
+            </div>
+
+            {/* 2. Policy Assignment (Read-Only) */}
+            <div>
+               <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                     <Layers size={14} /> 关联配额策略 (多选)
+                  </h4>
+               </div>
+               
+               <div className="flex flex-wrap gap-2 p-4 rounded-xl border border-blue-200 bg-blue-50/30">
+                  {activePolicies.length > 0 ? activePolicies.map(policy => {
+                     // Check inheritance source for badge label
+                     let badgeType = 'default';
+                     let badgeLabel = '';
+                     
+                     if (formData.assignedPolicyIds?.includes(policy.id) || policy.appliedUserIds.includes(formData.id)) {
+                        badgeType = 'direct';
+                        badgeLabel = '特例';
+                     } else if (policy.appliedDepartments.some(d => isDepartmentOrChild(formData.department, d, allDepts))) {
+                        badgeType = 'dept';
+                        badgeLabel = '继承';
+                     } else if (policy.targetAll) {
+                        badgeType = 'global';
+                        badgeLabel = '全员';
+                     }
+
+                     return (
+                        <div 
+                           key={policy.id}
+                           className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center gap-1.5 shadow-sm ${
+                               badgeType === 'direct' ? 'bg-white text-indigo-600 border-indigo-200' : 
+                               'bg-white text-slate-600 border-slate-200'
+                           }`}
+                        >
+                           {badgeType === 'direct' && <Check size={12} strokeWidth={3} className="text-indigo-600" />}
+                           {badgeType !== 'direct' && <Check size={12} strokeWidth={3} className="text-slate-400" />}
+                           {policy.name}
+                           <span className={`text-[9px] px-1.5 py-0.5 rounded ml-1 font-extrabold ${
+                               badgeType === 'direct' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'
+                           }`}>
+                               {badgeLabel}
+                           </span>
+                        </div>
+                     );
+                  }) : (
+                      <span className="text-xs text-slate-400 font-medium pl-1 italic">暂无生效策略</span>
+                  )}
+               </div>
+               <div className="mt-2 flex gap-1 text-[10px] text-slate-400 px-1">
+                  <Info size={12} className="shrink-0 mt-0.5" />
+                  <span>策略由系统根据用户部门或全局规则自动分配，或由管理员在策略配置中指定特例。此处仅做展示。</span>
+               </div>
+            </div>
+
+            {/* 3. Effective Quota Preview */}
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+               <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                     <Calculator size={14} /> 额度与使用量 (本月)
+                  </h4>
+                  <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-1 rounded border border-slate-100">实时计算</span>
+               </div>
+               
+               <div className="grid grid-cols-10 gap-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-wide mb-2 px-2">
+                  <div className="col-span-4">模型服务</div>
+                  <div className="col-span-3 text-right">已使用</div>
+                  <div className="col-span-3 text-right">策略限额</div>
+               </div>
+
+               <div className="space-y-1">
+                  {effectiveQuotas.map(model => {
+                      const used = getModelUsage(model.id);
+                      const limit = model.limit;
+                      const isUnlimited = limit === 'unlimited';
+                      
+                      return (
+                          <div key={model.id} className="grid grid-cols-10 gap-2 items-center text-sm py-2 px-2 border-b border-slate-200/50 last:border-0 bg-white rounded-lg shadow-sm">
+                             <div className="col-span-4 font-bold text-slate-700 truncate" title={model.name}>{model.name}</div>
+                             <div className="col-span-3 text-right font-medium text-slate-500">
+                                {used >= 1000 ? (used/1000).toFixed(1) + 'k' : used}
+                             </div>
+                             <div className={`col-span-3 text-right font-bold ${isUnlimited ? 'text-indigo-600' : 'text-slate-900'}`}>
+                                {isUnlimited ? '∞' : (limit as number) >= 1000 ? ((limit as number)/1000).toFixed(1) + 'k' : limit}
+                             </div>
+                          </div>
+                      );
+                  })}
+               </div>
+            </div>
+         </div>
+
+         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+            <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button>
+            <button onClick={() => onSave(formData)} className="px-6 py-2.5 rounded-xl text-sm font-bold bg-slate-900 text-white shadow-lg shadow-slate-200 hover:bg-slate-800 hover:shadow-xl transition-all">确认保存</button>
+         </div>
+      </div>
+    </div>
   );
 };
 
@@ -1048,9 +718,18 @@ export const AdminDashboard: React.FC = () => {
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleDefinition | null>(null);
 
+  // User Editing State
+  const [isUserEditModalOpen, setIsUserEditModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  
+  // Multi-Selection State
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [isBatchRoleModalOpen, setIsBatchRoleModalOpen] = useState(false); // Can reuse standard logic or add simple
+  const [batchRoleTarget, setBatchRoleTarget] = useState<UserRole>('user');
+
   // Helper: Get active policies for display/filtering logic
   const getUserActivePolicies = (user: User) => {
-    return getApplicablePoliciesForUser(user, policies);
+    return getApplicablePoliciesForUser(user, policies, departments);
   };
 
   const getRoleConfig = (roleKey: UserRole) => {
@@ -1064,8 +743,6 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleSavePolicy = (newPolicy: Policy) => {
-    // 1. Update Policies List
-    // Note: We REMOVED the logic that strips users from other policies. Multi-policy is now allowed.
     setPolicies(prev => {
       const exists = prev.find(p => p.id === newPolicy.id);
       if (exists) {
@@ -1075,13 +752,9 @@ export const AdminDashboard: React.FC = () => {
       }
     });
 
-    // 2. Sync User State 'assignedPolicyIds' for easier lookup (optional but good for consistency)
     setUsers(prev => prev.map(u => {
-      // Logic: Update the specific policy ID in the user's list
-      // Check if user is in the new policy's applied list
       const inNewPolicy = newPolicy.appliedUserIds.includes(u.id);
       let newAssignedIds = u.assignedPolicyIds || [];
-
       if (inNewPolicy) {
          if (!newAssignedIds.includes(newPolicy.id)) {
             newAssignedIds = [...newAssignedIds, newPolicy.id];
@@ -1089,11 +762,7 @@ export const AdminDashboard: React.FC = () => {
       } else {
          newAssignedIds = newAssignedIds.filter(id => id !== newPolicy.id);
       }
-      
-      return { 
-        ...u, 
-        assignedPolicyIds: newAssignedIds
-      };
+      return { ...u, assignedPolicyIds: newAssignedIds };
     }));
 
     setIsPolicyModalOpen(false);
@@ -1102,17 +771,11 @@ export const AdminDashboard: React.FC = () => {
 
   const handleDeletePolicy = (id: string) => {
     const isUsed = policies.find(p => p.id === id)?.appliedDepartments.length! > 0 || policies.find(p => p.id === id)?.targetAll;
-    
-    // Warn if department or global usage, but for users we just remove the assignment
     if (isUsed) {
       alert("策略正在作为部门默认或全局策略使用，请先移除相关关联。");
       return;
     }
-    
-    // Remove from policies
     setPolicies(prev => prev.filter(p => p.id !== id));
-    
-    // Clean up users
     setUsers(prev => prev.map(u => ({
         ...u,
         assignedPolicyIds: u.assignedPolicyIds?.filter(pid => pid !== id)
@@ -1130,22 +793,49 @@ export const AdminDashboard: React.FC = () => {
     setEditingRole(null);
   };
 
+  // User Management Handlers
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+       setSelectedUserIds(filteredUsers.map(u => u.id));
+    } else {
+       setSelectedUserIds([]);
+    }
+  };
+
+  const handleSelectUser = (id: string) => {
+    setSelectedUserIds(prev => 
+       prev.includes(id) ? prev.filter(uid => uid !== id) : [...prev, id]
+    );
+  };
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+    setIsUserEditModalOpen(true);
+  };
+
+  const handleSaveUser = (updatedUser: User) => {
+    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+    setIsUserEditModalOpen(false);
+    setEditingUser(null);
+  };
+
+  const handleBatchRoleUpdate = (role: UserRole) => {
+     setUsers(prev => prev.map(u => 
+        selectedUserIds.includes(u.id) ? { ...u, role: role } : u
+     ));
+     setSelectedUserIds([]); // Clear selection after action
+  };
+
   // Export Functionality
   const handleExportOverview = () => {
     const isApp = overviewDimension === 'app';
     const data = isApp ? MOCK_USAGE_BY_APP : MOCK_USAGE_BY_DEPT;
-    
-    // Headers
     const headers = isApp 
       ? 'Application Name,Total Calls,Tokens Consumed,Estimated Cost (CNY)\n'
       : 'Department Name,Total Calls,Tokens Consumed,Estimated Cost (CNY)\n';
-
-    // Rows
     const csvContent = data.reduce((acc, row) => {
       return acc + `${row.name},${row.calls},${row.tokens},${row.cost}\n`;
     }, headers);
-
-    // Trigger Download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1159,24 +849,18 @@ export const AdminDashboard: React.FC = () => {
   // Selection Logic
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
-      // Basic Search
       const matchesSearch = user.name.includes(searchQuery) || user.email.includes(searchQuery) || user.department.includes(searchQuery);
-      
-      // Policy Filter
       let matchesPolicy = true;
       if (filterPolicy === 'special') {
           matchesPolicy = (user.assignedPolicyIds?.length || 0) > 0;
       } else if (filterPolicy !== 'all') {
-         const activePolicies = getApplicablePoliciesForUser(user, policies);
+         const activePolicies = getApplicablePoliciesForUser(user, policies, departments);
          matchesPolicy = activePolicies.some(p => p.id === filterPolicy);
       }
-
-      // Role Filter
       let matchesRole = true;
       if (filterRole !== 'all') {
         matchesRole = user.role === filterRole;
       }
-
       return matchesSearch && matchesPolicy && matchesRole;
     });
   }, [users, searchQuery, filterPolicy, filterRole, departments, policies]);
@@ -1193,7 +877,7 @@ export const AdminDashboard: React.FC = () => {
     <div className="flex h-[calc(100vh-64px)] bg-slate-50 p-6 gap-6 overflow-hidden">
       
       {/* Admin Sidebar */}
-      <aside className="w-64 bg-white/70 backdrop-blur-xl border border-white/50 rounded-3xl flex flex-col shadow-float py-6 hidden lg:flex flex-shrink-0">
+      <aside className="w-64 bg-white/70 backdrop-blur-xl border border-white/50 rounded-3xl flex flex-col shadow-float py-6 hidden lg:flex flex-shrink-0 ring-1 ring-slate-900/5">
          <div className="px-6 mb-8">
             <h2 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
                <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
@@ -1233,13 +917,12 @@ export const AdminDashboard: React.FC = () => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 bg-white/60 backdrop-blur-md border border-white/60 rounded-3xl shadow-float flex flex-col overflow-hidden relative">
+      <main className="flex-1 bg-white/60 backdrop-blur-md border border-white/60 rounded-3xl shadow-float flex flex-col overflow-hidden relative ring-1 ring-slate-900/5">
         <div className="absolute inset-0 bg-mesh opacity-50 pointer-events-none -z-10" />
 
         {/* Tab: Overview */}
         {activeTab === 'overview' && (
            <div className="flex-1 overflow-y-auto p-8">
-              {/* ... (Overview content preserved as is, only minor aesthetic tweaks implicit in CSS) ... */}
               <div className="flex justify-between items-end mb-8">
                 <div>
                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">数据概览</h2>
@@ -1370,9 +1053,9 @@ export const AdminDashboard: React.FC = () => {
 
         {/* Tab: User Management */}
         {activeTab === 'users' && (
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden relative">
             {/* Toolbar */}
-            <div className="p-6 flex flex-col md:flex-row gap-4 justify-between items-center transition-all border-b border-white/50">
+            <div className="p-6 flex flex-col md:flex-row gap-4 justify-between items-center transition-all border-b border-white/50 bg-white/40 backdrop-blur-sm z-10">
                 <div className="flex gap-3 w-full md:w-auto items-center">
                    <div className="relative flex-1 md:w-60 group">
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
@@ -1411,19 +1094,30 @@ export const AdminDashboard: React.FC = () => {
 
             {/* User List */}
             <div className="flex-1 overflow-x-auto p-6 pt-0">
-               <div className="bg-white/80 border border-white/50 rounded-3xl shadow-sm overflow-hidden min-w-[1000px]">
+               <div className="bg-white/80 border border-white/60 rounded-3xl shadow-sm overflow-hidden min-w-[1000px] ring-1 ring-slate-900/5 mt-4">
                  <table className="w-full text-left border-collapse table-auto">
                    <thead>
-                     <tr className="bg-slate-50/50 border-b border-slate-100 text-slate-400">
-                       <th className="p-5 pl-8 text-xs font-extrabold uppercase tracking-wider">用户</th>
+                     <tr className="bg-slate-50/80 border-b border-slate-200/60 text-slate-400 backdrop-blur-sm">
+                       <th className="p-5 pl-6 w-12">
+                          <label className="flex items-center justify-center cursor-pointer">
+                             <input 
+                               type="checkbox" 
+                               checked={selectedUserIds.length > 0 && selectedUserIds.length === filteredUsers.length}
+                               onChange={handleSelectAll}
+                               className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary/20 cursor-pointer" 
+                             />
+                          </label>
+                       </th>
+                       <th className="p-5 pl-2 text-xs font-extrabold uppercase tracking-wider">用户</th>
                        <th className="p-5 text-xs font-extrabold uppercase tracking-wider">角色 & 状态</th>
                        <th className="p-5 text-xs font-extrabold uppercase tracking-wider">部门 & 策略组合</th>
-                       <th className="p-5 text-xs font-extrabold uppercase tracking-wider">当前生效配额 (取策略最大值)</th>
+                       <th className="p-5 text-xs font-extrabold uppercase tracking-wider">当前生效配额 (策略略最大值)</th>
+                       <th className="p-5 text-xs font-extrabold uppercase tracking-wider text-right pr-6">操作</th>
                      </tr>
                    </thead>
-                   <tbody className="divide-y divide-slate-50">
+                   <tbody className="divide-y divide-slate-100/50">
                      {filteredUsers.map((user) => {
-                       const activePolicies = getApplicablePoliciesForUser(user, policies);
+                       const activePolicies = getApplicablePoliciesForUser(user, policies, departments);
                        const roleInfo = getRoleConfig(user.role);
                        
                        // Calculation Logic for Quota Health based on Effective Limits
@@ -1434,9 +1128,7 @@ export const AdminDashboard: React.FC = () => {
 
                        user.quotas.forEach(q => {
                          const effectiveLimit = getEffectiveModelLimit(q.modelId, activePolicies);
-                         
                          totalUsed += q.used;
-                         
                          if (effectiveLimit === 'unlimited') {
                            hasUnlimited = true;
                          } else {
@@ -1451,38 +1143,39 @@ export const AdminDashboard: React.FC = () => {
 
                        let statusConfig = {
                          label: '状态正常',
-                         className: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+                         className: 'bg-emerald-50 text-emerald-600 border-emerald-200',
                          barColor: 'bg-emerald-500'
                        };
 
                        if (hasUnlimited) {
-                          statusConfig = {
-                           label: '无限畅用',
-                           className: 'bg-indigo-50 text-indigo-600 border-indigo-100',
-                           barColor: 'bg-indigo-500'
-                         };
+                          statusConfig = { label: '无限畅用', className: 'bg-indigo-50 text-indigo-600 border-indigo-200', barColor: 'bg-indigo-500' };
                        } else if (isCritical) {
-                         statusConfig = {
-                           label: '已超额',
-                           className: 'bg-red-50 text-red-600 border-red-100',
-                           barColor: 'bg-red-500'
-                         };
+                         statusConfig = { label: '已超额', className: 'bg-red-50 text-red-600 border-red-200', barColor: 'bg-red-500' };
                        } else if (isWarning) {
-                         statusConfig = {
-                           label: '额度紧张',
-                           className: 'bg-orange-50 text-orange-600 border-orange-100',
-                           barColor: 'bg-orange-500'
-                         };
+                         statusConfig = { label: '额度异常', className: 'bg-orange-50 text-orange-600 border-orange-200', barColor: 'bg-orange-500' };
                        }
                        
+                       const isSelected = selectedUserIds.includes(user.id);
+
                        return (
                          <tr 
                            key={user.id} 
-                           className="hover:bg-slate-50 transition-colors"
+                           className={`transition-colors ${isSelected ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}
+                           onClick={() => handleSelectUser(user.id)}
                          >
-                           <td className="p-5 pl-8 align-middle">
+                           <td className="p-5 pl-6 align-middle" onClick={e => e.stopPropagation()}>
+                               <label className="flex items-center justify-center cursor-pointer">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isSelected}
+                                    onChange={() => handleSelectUser(user.id)}
+                                    className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary/20 cursor-pointer" 
+                                  />
+                               </label>
+                           </td>
+                           <td className="p-5 pl-2 align-middle">
                              <div className="flex items-center gap-3">
-                               <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-sm">
+                               <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-sm shadow-sm">
                                  {user.name.charAt(0)}
                                </div>
                                <div>
@@ -1493,28 +1186,44 @@ export const AdminDashboard: React.FC = () => {
                            </td>
                            <td className="p-5 align-middle">
                              <div className="flex flex-col items-start gap-1.5">
-                               <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide border shadow-sm ${roleInfo.bg} ${roleInfo.color}`}>
+                               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wide border shadow-sm ${roleInfo.bg} ${roleInfo.color}`}>
                                  {roleInfo.icon} {roleInfo.label}
                                </span>
                                {user.status === 'active' 
-                                 ? <span className="text-xs font-bold text-emerald-500 flex items-center gap-1 ml-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> 活跃</span>
-                                 : <span className="text-xs font-bold text-slate-400 flex items-center gap-1 ml-1"><div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div> 禁用</span>
+                                 ? <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-1 ml-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> 活跃</span>
+                                 : <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 ml-1"><div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div> 禁用</span>
                                }
                              </div>
                            </td>
                            <td className="p-5 align-middle">
-                             <div className="flex flex-col gap-1.5">
-                               <span className="text-sm font-bold text-slate-700">{user.department}</span>
-                               <div className="flex flex-wrap gap-1.5 max-w-[250px]">
+                             <div className="flex flex-col gap-2">
+                               <span className="text-sm font-bold text-slate-800">{user.department}</span>
+                               <div className="flex flex-wrap gap-1.5 max-w-[300px]">
                                  {activePolicies.length > 0 ? activePolicies.map(p => {
-                                    const isDirect = p.appliedUserIds.includes(user.id);
+                                    const isDirect = p.appliedUserIds.includes(user.id) || user.assignedPolicyIds?.includes(p.id);
+                                    const isDeptInherited = p.appliedDepartments.some(d => isDepartmentOrChild(user.department, d, departments));
+                                    
+                                    // Visual differentiation for source of policy
+                                    let badgeStyle = "bg-slate-50 text-slate-500 border-slate-200 ring-slate-100";
+                                    let icon = <Layers size={10} />;
+                                    
+                                    if (isDirect) {
+                                        badgeStyle = "bg-indigo-50 text-indigo-600 border-indigo-200 ring-indigo-100"; // Specific assignment
+                                        icon = <Zap size={10} />;
+                                    } else if (p.id === 'p_dev') { // Example logic for R&D policy visual
+                                        badgeStyle = "bg-blue-50 text-blue-600 border-blue-200 ring-blue-100";
+                                    } else if (p.id === 'p_vip') {
+                                        badgeStyle = "bg-amber-50 text-amber-600 border-amber-200 ring-amber-100";
+                                        icon = <Crown size={10} />;
+                                    }
+
                                     return (
                                        <span 
                                          key={p.id} 
-                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${isDirect ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-500 border-slate-100'}`}
-                                         title={isDirect ? "特例分配 (叠加)" : p.targetAll ? "全局默认" : "部门默认"}
+                                         className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border ring-1 ring-inset ${badgeStyle}`}
+                                         title={isDirect ? "特例分配 (叠加)" : isDeptInherited ? "部门继承" : "全局默认"}
                                        >
-                                          {isDirect ? <Zap size={10} /> : <Layers size={10} />}
+                                          {icon}
                                           {p.name}
                                        </span>
                                     );
@@ -1525,26 +1234,31 @@ export const AdminDashboard: React.FC = () => {
                              </div>
                            </td>
                            <td className="p-5 align-middle">
-                              <div className="w-full max-w-[180px]">
+                              <div className="w-full max-w-[200px]">
                                  <div className="flex items-center justify-between mb-2">
-                                     <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border uppercase tracking-wide ${statusConfig.className}`}>
+                                     <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border ring-1 ring-inset uppercase tracking-wide ${statusConfig.className}`}>
                                          {statusConfig.label}
                                      </span>
                                      <div className="text-xs font-bold text-slate-700">
                                          {formatNumber(totalUsed)} <span className="text-slate-400 font-medium">/ {hasUnlimited ? '∞' : formatNumber(totalLimit)}</span>
                                      </div>
                                  </div>
-                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner ring-1 ring-slate-200/50">
                                     {hasUnlimited ? (
                                        <div className={`h-full w-full stripe-bg opacity-30 ${statusConfig.barColor}`}></div>
                                     ) : (
-                                       <div 
-                                         className={`h-full rounded-full transition-all duration-500 ${statusConfig.barColor}`} 
-                                         style={{ width: `${percent}%` }}
-                                       ></div>
+                                       <div className={`h-full rounded-full transition-all duration-500 ${statusConfig.barColor}`} style={{ width: `${percent}%` }}></div>
                                     )}
                                  </div>
                               </div>
+                           </td>
+                           <td className="p-5 align-middle text-right pr-6">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleEditUser(user); }}
+                                className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-700 transition-colors"
+                              >
+                                 <Edit3 size={16} />
+                              </button>
                            </td>
                          </tr>
                        );
@@ -1553,6 +1267,26 @@ export const AdminDashboard: React.FC = () => {
                  </table>
                </div>
             </div>
+            
+            {/* Batch Action Bar */}
+            {selectedUserIds.length > 0 && (
+               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom-6 z-20 ring-1 ring-white/10">
+                   <div className="flex items-center gap-2 text-sm font-bold border-r border-white/20 pr-6">
+                      <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-slate-900 text-xs">{selectedUserIds.length}</div>
+                      已选择用户
+                   </div>
+                   <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">批量操作:</span>
+                      <button 
+                         onClick={() => setIsBatchRoleModalOpen(true)}
+                         className="px-4 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold transition-all flex items-center gap-2"
+                      >
+                         <UserCog size={14} /> 修改角色
+                      </button>
+                   </div>
+                   <button onClick={() => setSelectedUserIds([])} className="ml-2 text-slate-400 hover:text-white"><X size={16} /></button>
+               </div>
+            )}
           </div>
         )}
 
@@ -1571,22 +1305,17 @@ export const AdminDashboard: React.FC = () => {
                     {policies.map(policy => {
                        const deptCount = policy.appliedDepartments.length;
                        const userCount = policy.appliedUserIds.length;
-                       
                        return (
-                         <div key={policy.id} className="group bg-white/80 backdrop-blur-sm border border-white/50 rounded-3xl p-6 shadow-sm hover:shadow-card-hover transition-all">
+                         <div key={policy.id} className="group bg-white/80 backdrop-blur-sm border border-white/50 rounded-3xl p-6 shadow-sm hover:shadow-card-hover transition-all ring-1 ring-slate-900/5">
                             <div className="flex justify-between items-start mb-6">
                                <div className="flex items-center gap-4">
-                                  <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-900 flex items-center justify-center border border-slate-100 group-hover:bg-primary group-hover:text-slate-900 group-hover:scale-110 transition-all duration-300">
+                                  <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-900 flex items-center justify-center border border-slate-100 group-hover:bg-primary group-hover:text-slate-900 group-hover:scale-110 transition-all duration-300 shadow-sm">
                                     <Layers size={24} />
                                   </div>
                                   <div>
                                     <h3 className="font-extrabold text-slate-900 text-lg">{policy.name}</h3>
                                     <div className="flex items-center gap-3 text-xs font-bold text-slate-400 mt-1">
-                                       {policy.targetAll ? (
-                                           <span className="flex items-center gap-1 text-primary-dark"><Globe size={12} /> 全员应用</span>
-                                       ) : (
-                                          <span className="flex items-center gap-1"><Building2 size={12} /> {deptCount} 部门</span>
-                                       )}
+                                       {policy.targetAll ? (<span className="flex items-center gap-1 text-primary-dark"><Globe size={12} /> 全员应用</span>) : (<span className="flex items-center gap-1"><Building2 size={12} /> {deptCount} 部门</span>)}
                                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                                        <span className="flex items-center gap-1"><Users size={12} /> {userCount} 特例用户</span>
                                     </div>
@@ -1597,11 +1326,9 @@ export const AdminDashboard: React.FC = () => {
                                  <button onClick={() => handleDeletePolicy(policy.id)} className="p-2 hover:bg-red-50 rounded-xl text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
                                </div>
                             </div>
-                            
                             <div className="bg-slate-50 rounded-xl p-4 mb-5 border border-slate-100 min-h-[80px]">
                               <p className="text-sm text-slate-500 leading-relaxed font-medium">{policy.description || '暂无描述'}</p>
                             </div>
-                            
                             <div className="space-y-3">
                                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">配额详情 (Top 4)</p>
                                <div className="flex flex-wrap gap-2">
@@ -1641,6 +1368,49 @@ export const AdminDashboard: React.FC = () => {
         onClose={() => setIsPolicyModalOpen(false)}
         onSave={handleSavePolicy}
       />
+
+      {/* Single User Edit Modal */}
+      <UserEditModal 
+        user={editingUser}
+        isOpen={isUserEditModalOpen}
+        onClose={() => setIsUserEditModalOpen(false)}
+        onSave={handleSaveUser}
+        policies={policies}
+        roleConfigs={roleConfigs}
+        allDepts={departments} // Pass departments for hierarchy check
+      />
+
+      {/* Simple Batch Role Modal */}
+      {isBatchRoleModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 ring-1 ring-black/5">
+                <h3 className="text-lg font-bold text-slate-900 mb-4">批量修改角色</h3>
+                <p className="text-sm text-slate-500 mb-4">将为选中的 <span className="font-bold text-slate-800">{selectedUserIds.length}</span> 名用户设置新角色：</p>
+                <div className="space-y-2 mb-6">
+                   {roleConfigs.map(role => (
+                      <div 
+                        key={role.key} 
+                        onClick={() => setBatchRoleTarget(role.key)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${batchRoleTarget === role.key ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                      >
+                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${role.bg} ${role.color}`}>{role.icon}</div>
+                         <span className={`text-sm font-bold ${batchRoleTarget === role.key ? 'text-indigo-900' : 'text-slate-700'}`}>{role.label}</span>
+                         {batchRoleTarget === role.key && <CheckCircle size={16} className="ml-auto text-indigo-600" />}
+                      </div>
+                   ))}
+                </div>
+                <div className="flex gap-3">
+                   <button onClick={() => setIsBatchRoleModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50">取消</button>
+                   <button 
+                     onClick={() => { handleBatchRoleUpdate(batchRoleTarget); setIsBatchRoleModalOpen(false); }}
+                     className="flex-1 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold shadow-lg hover:bg-slate-800"
+                   >
+                      确认修改
+                   </button>
+                </div>
+             </div>
+          </div>
+      )}
 
     </div>
   );

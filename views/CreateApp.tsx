@@ -7,7 +7,7 @@ import {
   FileText, Cpu, Plug, 
   BrainCircuit, Database, Search, Code2, Sparkles, X,
   Key, Link, Settings2, Mic, Volume2, Lightbulb, Paperclip, AlertCircle, Loader2, ChevronRight, Edit3, 
-  MessageCircle, HelpCircle, Quote, ShieldCheck, PenTool, LayoutGrid
+  MessageCircle, HelpCircle, Quote, ShieldCheck, PenTool, LayoutGrid, Lock, Users, Building2
 } from 'lucide-react';
 import { AppData, WorkflowInputDef } from '../types';
 
@@ -33,6 +33,23 @@ const AVAILABLE_ICONS = [
   { id: 'zap', icon: <Zap size={20} />, label: '通用' },
 ];
 
+const DEPARTMENTS = [
+  '总经办',
+  '法务部',
+  '保护产品中心',
+  '创新产品中心',
+  '研发中心',
+  '供应链中心',
+  '电商事业部',
+  '线下事业部',
+  '品牌营销中心',
+  '流程IT中心',
+  '财务中心',
+  '人力行政中心',
+  '稻核部',
+  '临时部门'
+];
+
 export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialData }) => {
   // Determine initial creation type based on initialData
   const getInitialCreationType = (): CreationType => {
@@ -49,7 +66,13 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
     description: initialData?.description || '',
     icon: initialData?.icon || 'zap', // Added icon state
     iconBg: initialData?.iconBg || '#e0f2fe',
-    category: '效率工具小组',
+    category: '创新产品中心',
+  });
+
+  // Visibility Scope State
+  const [visibilityConfig, setVisibilityConfig] = useState({
+    type: (initialData?.visibility || 'public') as 'private' | 'department' | 'public',
+    target: initialData?.targetAudience || ''
   });
 
   // External Form State
@@ -97,9 +120,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
         provider: externalConfig.provider,
         mode: externalConfig.mode,
         apiEndpoint: externalConfig.apiEndpoint,
-        // icon: Use basicInfo.icon instead of hardcoding
         tag: externalConfig.mode === 'chat' ? '对话' : '自动化',
-        // Preserve existing stats if editing, otherwise defaults
         usersCount: initialData?.usersCount || '0',
         likes: initialData?.likes || 0,
         dislikes: initialData?.dislikes || 0,
@@ -107,9 +128,11 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
         feedbacks: initialData?.feedbacks || 0,
         isFav: initialData?.isFav || false,
         quota: initialData?.quota || { limit: 100, used: 0, unit: '次' },
-        workflowInputs: externalConfig.workflowInputs, // Keep strictly defined variables
-        capabilities: capabilities, // Save capabilities separately
-        welcomeMessage: capabilities.welcomeMessage ? welcomeMessageContent : undefined
+        workflowInputs: externalConfig.workflowInputs,
+        capabilities: capabilities,
+        welcomeMessage: capabilities.welcomeMessage ? welcomeMessageContent : undefined,
+        visibility: visibilityConfig.type,
+        targetAudience: visibilityConfig.type === 'department' ? visibilityConfig.target : undefined
       });
       setIsSubmitting(false);
     }, 1500);
@@ -122,9 +145,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
         ...basicInfo,
         provider: 'native',
         mode: 'chat',
-        // icon: Use basicInfo.icon
-        tag: '对话', // Native is always chat type
-        // Preserve existing stats if editing
+        tag: '对话',
         usersCount: initialData?.usersCount || '0',
         likes: initialData?.likes || 0,
         dislikes: initialData?.dislikes || 0,
@@ -132,7 +153,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
         feedbacks: initialData?.feedbacks || 0,
         isFav: initialData?.isFav || false,
         quota: initialData?.quota || { limit: 1000, used: 0, unit: 'Tokens' },
-        capabilities: { ...capabilities, fileUpload: true }, // Native always supports file upload (RAG/Analysis)
+        capabilities: { ...capabilities, fileUpload: true },
         welcomeMessage: capabilities.welcomeMessage ? welcomeMessageContent : undefined,
         modelConfig: {
             modelId: nativeConfig.modelId,
@@ -141,7 +162,9 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
             enableWebSearch: nativeConfig.enableWebSearch,
             enableCodeInterpreter: nativeConfig.enableCodeInterpreter,
             knowledgeBaseIds: nativeConfig.knowledgeFiles
-        }
+        },
+        visibility: visibilityConfig.type,
+        targetAudience: visibilityConfig.type === 'department' ? visibilityConfig.target : undefined
       });
       setIsSubmitting(false);
     }, 1500);
@@ -174,7 +197,6 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
             });
             setWelcomeMessageContent("你好！我是接入的 Dify 智能体，请问有什么可以帮你？");
         } else {
-             // n8n or others often don't have these conversational features in the same way, defaulting to off
             setCapabilities({
                 welcomeMessage: false,
                 fileUpload: false,
@@ -420,6 +442,93 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
     </div>
   );
 
+  const renderVisibilitySection = (stepNumber: number) => (
+    <section className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 delay-300">
+         <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm">
+                {stepNumber} 
+            </div>
+            <h3 className="text-lg font-bold text-slate-800">可见范围设置</h3>
+         </div>
+
+         <div className="pl-11 space-y-4">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 {/* Private */}
+                 <div 
+                    onClick={() => setVisibilityConfig({ ...visibilityConfig, type: 'private' })}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-3 ${visibilityConfig.type === 'private' ? 'border-slate-800 bg-slate-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                 >
+                    <div className="flex items-center justify-between">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${visibilityConfig.type === 'private' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <Lock size={16} />
+                        </div>
+                        {visibilityConfig.type === 'private' && <CheckCircle size={16} className="text-slate-800" />}
+                    </div>
+                    <div>
+                        <div className="font-bold text-slate-700 text-sm">仅个人可见</div>
+                        <div className="text-xs text-slate-400 mt-1">仅自己和管理员可访问</div>
+                    </div>
+                 </div>
+
+                 {/* Department */}
+                 <div 
+                    onClick={() => setVisibilityConfig({ ...visibilityConfig, type: 'department' })}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-3 ${visibilityConfig.type === 'department' ? 'border-indigo-500 bg-indigo-50/30' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                 >
+                    <div className="flex items-center justify-between">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${visibilityConfig.type === 'department' ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <Users size={16} />
+                        </div>
+                        {visibilityConfig.type === 'department' && <CheckCircle size={16} className="text-indigo-500" />}
+                    </div>
+                    <div>
+                        <div className="font-bold text-slate-700 text-sm">指定部门</div>
+                        <div className="text-xs text-slate-400 mt-1">仅特定部门成员可访问</div>
+                    </div>
+                 </div>
+
+                 {/* Public */}
+                 <div 
+                    onClick={() => setVisibilityConfig({ ...visibilityConfig, type: 'public' })}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-3 ${visibilityConfig.type === 'public' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                 >
+                    <div className="flex items-center justify-between">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${visibilityConfig.type === 'public' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <Globe size={16} />
+                        </div>
+                        {visibilityConfig.type === 'public' && <CheckCircle size={16} className="text-emerald-500" />}
+                    </div>
+                    <div>
+                        <div className="font-bold text-slate-700 text-sm">全公司可见</div>
+                        <div className="text-xs text-slate-400 mt-1">所有员工均可发现并使用</div>
+                    </div>
+                 </div>
+             </div>
+
+             {/* Department Selection Input */}
+             {visibilityConfig.type === 'department' && (
+                 <div className="animate-in fade-in slide-in-from-top-2">
+                    <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">选择部门</label>
+                    <div className="relative">
+                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <select 
+                            value={visibilityConfig.target}
+                            onChange={(e) => setVisibilityConfig({ ...visibilityConfig, target: e.target.value })}
+                            className="w-full pl-11 pr-4 py-3 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                        >
+                            <option value="" disabled>请选择目标部门</option>
+                            {DEPARTMENTS.map(dept => (
+                                <option key={dept} value={dept}>{dept}</option>
+                            ))}
+                        </select>
+                        <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 rotate-90" size={16} />
+                    </div>
+                 </div>
+             )}
+         </div>
+    </section>
+  );
+
   const renderExternalConfig = () => (
     <>
       {renderBasicInfoSection()}
@@ -431,7 +540,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
              <div className="flex gap-4">
                 <div 
                   onClick={() => setExternalConfig(prev => ({...prev, mode: 'chat'}))}
-                  className={`flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${externalConfig.mode === 'chat' ? 'border-primary bg-primary-soft/30' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                  className={`flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${externalConfig.mode === 'chat' ? 'border-primary bg-primary/5' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                 >
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${externalConfig.mode === 'chat' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
                         <MessageSquare size={16} />
@@ -445,7 +554,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
 
                 <div 
                   onClick={() => setExternalConfig(prev => ({...prev, mode: 'workflow'}))}
-                  className={`flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${externalConfig.mode === 'workflow' ? 'border-primary bg-primary-soft/30' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                  className={`flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${externalConfig.mode === 'workflow' ? 'border-primary bg-primary/5' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                 >
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${externalConfig.mode === 'workflow' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'}`}>
                         <Workflow size={16} />
@@ -575,66 +684,69 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                    </div>
                 )}
             </div>
-
-            {/* 3.2 Detected Variables */}
-            {connectionStatus === 'success' && (
-                <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 delay-100">
-                    <div className="flex items-center gap-3 mb-2">
-                       <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">4</div>
-                       <h3 className="text-lg font-bold text-slate-800">检测到的变量字段</h3>
-                    </div>
-
-                    <div className="pl-11 space-y-3">
-                       {externalConfig.workflowInputs.length === 0 ? (
-                          <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                             <p className="text-sm font-medium text-slate-400">未检测到需要输入的变量</p>
-                          </div>
-                       ) : (
-                          externalConfig.workflowInputs.map((input, idx) => (
-                             <div key={input.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col gap-2 relative group">
-                                <div className="flex justify-between items-start">
-                                   <div className="flex items-center gap-2">
-                                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-mono font-bold rounded uppercase border border-indigo-100">
-                                         {input.label}
-                                      </span>
-                                      {input.required && <span className="text-red-500 text-xs font-bold">*</span>}
-                                   </div>
-                                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{input.type}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                   <input 
-                                     value={input.label} // Editing the displayed label
-                                     onChange={(e) => updateWorkflowInput(input.id, 'label', e.target.value)}
-                                     className="font-bold text-slate-700 text-sm border-b border-transparent hover:border-slate-200 focus:border-indigo-500 outline-none bg-transparent transition-colors w-full"
-                                     placeholder="Display Name"
-                                   />
-                                   <Edit3 size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                                {input.options && (
-                                   <div className="text-xs text-slate-400 flex gap-1 items-center">
-                                      <span>选项:</span> {input.options.join(', ')}
-                                   </div>
-                                )}
-                             </div>
-                          ))
-                       )}
-                    </div>
-                </div>
-            )}
-
-            {/* 3.3 Function Config */}
-            {connectionStatus === 'success' && (
-                <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 delay-200">
-                    <div className="flex items-center gap-3 mb-2">
-                       <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">5</div>
-                       <h3 className="text-lg font-bold text-slate-800">功能配置 (已同步)</h3>
-                    </div>
-
-                    {renderCapabilitiesSection(true)} 
-                </div>
-            )}
          </div>
       </section>
+
+      {/* 4. Detected Variables - SIBLING */}
+      {connectionStatus === 'success' && (
+          <section className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 delay-100">
+              <div className="flex items-center gap-3 mb-2">
+                 <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">4</div>
+                 <h3 className="text-lg font-bold text-slate-800">检测到的变量字段</h3>
+              </div>
+
+              <div className="pl-11 space-y-3">
+                 {externalConfig.workflowInputs.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                       <p className="text-sm font-medium text-slate-400">未检测到需要输入的变量</p>
+                    </div>
+                 ) : (
+                    externalConfig.workflowInputs.map((input, idx) => (
+                       <div key={input.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col gap-2 relative group">
+                          <div className="flex justify-between items-start">
+                             <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-mono font-bold rounded uppercase border border-indigo-100">
+                                   {input.label}
+                                </span>
+                                {input.required && <span className="text-red-500 text-xs font-bold">*</span>}
+                             </div>
+                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{input.type}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <input 
+                               value={input.label} // Editing the displayed label
+                               onChange={(e) => updateWorkflowInput(input.id, 'label', e.target.value)}
+                               className="font-bold text-slate-700 text-sm border-b border-transparent hover:border-slate-200 focus:border-indigo-500 outline-none bg-transparent transition-colors w-full"
+                               placeholder="Display Name"
+                             />
+                             <Edit3 size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          {input.options && (
+                             <div className="text-xs text-slate-400 flex gap-1 items-center">
+                                <span>选项:</span> {input.options.join(', ')}
+                             </div>
+                          )}
+                       </div>
+                    ))
+                 )}
+              </div>
+          </section>
+      )}
+
+      {/* 5. Function Config - SIBLING */}
+      {connectionStatus === 'success' && (
+          <section className="space-y-4 animate-in slide-in-from-bottom-4 duration-500 delay-200">
+              <div className="flex items-center gap-3 mb-2">
+                 <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">5</div>
+                 <h3 className="text-lg font-bold text-slate-800">功能配置 (已同步)</h3>
+              </div>
+
+              {renderCapabilitiesSection(true)} 
+          </section>
+      )}
+
+      {/* 6. Visibility Scope - Always show, adapt step number */}
+      {renderVisibilitySection(connectionStatus === 'success' ? 6 : 4)}
 
       <div className="pl-11 pt-4 pb-20">
          <button 
@@ -777,6 +889,8 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
             </div>
          </div>
       </section>
+
+      {renderVisibilitySection(4)}
 
       <div className="pl-11 pt-4 pb-20">
          <button 
@@ -924,6 +1038,7 @@ export const CreateApp: React.FC<CreateAppProps> = ({ onBack, onSubmit, initialD
                         <div className="flex justify-between"><span>Provider:</span> <span>{externalConfig.provider}</span></div>
                         <div className="flex justify-between"><span>Vars Detected:</span> <span>{detectedCount}</span></div>
                         <div className="flex justify-between"><span>Connection:</span> <span className={connectionStatus === 'success' ? 'text-emerald-500' : 'text-slate-400'}>{connectionStatus.toUpperCase()}</span></div>
+                        <div className="flex justify-between"><span>Scope:</span> <span>{visibilityConfig.type}</span></div>
                     </>
                 )}
              </div>

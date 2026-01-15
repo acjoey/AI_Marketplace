@@ -40,6 +40,10 @@ export interface AppData {
   };
   // Lifecycle Status
   status: 'draft' | 'published'; 
+  
+  // Visibility Scope
+  visibility?: 'private' | 'department' | 'public';
+  targetAudience?: string;
 
   // Mode: Determines interface (Chat vs Form)
   mode?: 'chat' | 'workflow';
