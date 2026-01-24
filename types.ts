@@ -92,7 +92,7 @@ export interface Thread {
 
 export interface WorkflowRunResult {
   id: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'succeeded' | 'failed' | 'stopped';
   timestamp: number;
   inputs: Record<string, any>;
   outputText?: string;

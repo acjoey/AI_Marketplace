@@ -534,7 +534,7 @@ const DepartmentSelectorModal: React.FC<{
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[600px] ring-1 ring-black/5">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80"><h3 className="text-base font-bold text-slate-900 flex items-center gap-2"><FolderTree size={18} className="text-indigo-600" />选择应用部门</h3><button onClick={onClose} className="p-1 hover:bg-slate-200/50 rounded-full text-slate-400"><X size={18} /></button></div>
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/80"><h3 className="text-base font-bold text-slate-900 flex items-center gap-2"><FolderTree size={18} className="text-indigo-600" />选择应用部门</h3><button onClick={onClose} className="p-1 hover:bg-slate-200/50 rounded-full text-slate-400"><X size={18} /></button></div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1">{departments.map(dept => (<RecursiveDeptItem key={dept.id} dept={dept} level={0} />))}</div>
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">取消</button><button onClick={() => onConfirm(tempSelected)} className="px-6 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">确认 ({tempSelected.length})</button></div>
       </div>
@@ -776,7 +776,7 @@ const UserEditModal: React.FC<{
             <div>
                <div className="flex justify-between items-center mb-3">
                   <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                     <Layers size={14} /> 关联配额策略 (多选)
+                     <Layers size={14} /> 关联配额策略
                   </h4>
                </div>
                
@@ -883,7 +883,6 @@ export const AdminDashboard: React.FC = () => {
   
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterPolicy, setFilterPolicy] = useState('all');
   const [filterRole, setFilterRole] = useState<UserRole | 'all'>('all');
   
   // Overview Tab State
@@ -1028,20 +1027,14 @@ export const AdminDashboard: React.FC = () => {
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
       const matchesSearch = user.name.includes(searchQuery) || user.email.includes(searchQuery) || user.department.includes(searchQuery);
-      let matchesPolicy = true;
-      if (filterPolicy === 'special') {
-          matchesPolicy = (user.assignedPolicyIds?.length || 0) > 0;
-      } else if (filterPolicy !== 'all') {
-         const activePolicies = getApplicablePoliciesForUser(user, policies, departments);
-         matchesPolicy = activePolicies.some(p => p.id === filterPolicy);
-      }
+      
       let matchesRole = true;
       if (filterRole !== 'all') {
         matchesRole = user.role === filterRole;
       }
-      return matchesSearch && matchesPolicy && matchesRole;
+      return matchesSearch && matchesRole;
     });
-  }, [users, searchQuery, filterPolicy, filterRole, departments, policies]);
+  }, [users, searchQuery, filterRole, departments, policies]);
 
   // Helper to format large numbers
   const formatNumber = (num: number) => {
@@ -1257,25 +1250,15 @@ export const AdminDashboard: React.FC = () => {
                      <option value="creator">创建者</option>
                      <option value="user">普通用户</option>
                    </select>
-
-                   <select 
-                     value={filterPolicy}
-                     onChange={(e) => setFilterPolicy(e.target.value)}
-                     className={`px-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 text-sm font-bold focus:outline-none focus:border-primary cursor-pointer hover:border-slate-300 shadow-sm ${filterPolicy === 'special' ? 'text-primary-dark border-primary/30 bg-primary-soft' : ''}`}
-                   >
-                     <option value="all">所有策略</option>
-                     <option value="special" className="font-bold">★ 特例用户 (不跟随部门)</option>
-                     {policies.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                   </select>
                 </div>
             </div>
 
             {/* User List */}
             <div className="flex-1 overflow-x-auto p-6 pt-0">
-               <div className="bg-white/80 border border-white/60 rounded-3xl shadow-sm overflow-hidden min-w-[1000px] ring-1 ring-slate-900/5 mt-4">
+               <div className="bg-white/60 border border-white/60 rounded-3xl shadow-sm overflow-hidden min-w-[1000px] ring-1 ring-slate-900/5 mt-4 backdrop-blur-md">
                  <table className="w-full text-left border-collapse table-auto">
                    <thead>
-                     <tr className="bg-slate-50/80 border-b border-slate-200/60 text-slate-400 backdrop-blur-sm">
+                     <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-500 backdrop-blur-sm text-xs font-extrabold uppercase tracking-wider">
                        <th className="p-5 pl-6 w-12">
                           <label className="flex items-center justify-center cursor-pointer">
                              <input 
@@ -1338,7 +1321,7 @@ export const AdminDashboard: React.FC = () => {
                        return (
                          <tr 
                            key={user.id} 
-                           className={`transition-colors ${isSelected ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}
+                           className={`transition-all duration-200 border-b border-slate-50/50 last:border-0 ${isSelected ? 'bg-indigo-50/40' : 'hover:bg-white hover:shadow-lg hover:shadow-slate-200/50 hover:scale-[1.001] cursor-pointer'}`}
                            onClick={() => handleSelectUser(user.id)}
                          >
                            <td className="p-5 pl-6 align-middle" onClick={e => e.stopPropagation()}>

@@ -50,7 +50,7 @@ const TOOLS: ToolDef[] = [
     {
         id: 'text-to-image',
         name: '自由创作',
-        description: '基于 Nano Banana 模型，通过文字描述生成无限创意画面。',
+        description: '基于 GPT-image 模型，通过文字描述生成无限创意画面。',
         icon: <Wand2 size={16} />,
         color: 'bg-emerald-50 text-emerald-600 border-emerald-100',
         inputs: [
@@ -332,7 +332,7 @@ export const ImageGenView: React.FC = () => {
                    </h2>
                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 mt-1.5">
                       <span className={`px-2 py-0.5 rounded-md border flex items-center gap-1 ${activeTool.id === 'text-to-image' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-blue-700 bg-blue-50 border-blue-100'}`}>
-                         <Zap size={10} fill="currentColor" /> {activeTool.id === 'text-to-image' ? 'Nano Banana' : 'ComfyUI'}
+                         <Zap size={10} fill="currentColor" /> {activeTool.id === 'text-to-image' ? 'GPT-image' : 'ComfyUI'}
                       </span>
                    </div>
                 </div>
